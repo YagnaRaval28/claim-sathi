@@ -1,0 +1,82 @@
+# Merge gate (testing-strategy §6.1). Action major versions are pinned; pin to commit SHAs once the first run is green.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: claimsathi
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: claimsathi_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U claimsathi" --health-interval 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://claimsathi:ci-only-password@localhost:5432/claimsathi_test
+      MIGRATION_DATABASE_URL: postgresql+psycopg://claimsathi:ci-only-password@localhost:5432/claimsathi_test
+      # Test-only values (not secrets): the app refuses to start without them.
+      SUPABASE_DB_URL: postgresql+psycopg://claimsathi:ci-only-password@localhost:5432/claimsathi_test
+      FIELD_DATA_KEY: a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=
+      HASH_PEPPER: ci-hash-pepper-ci-hash-pepper-ci-hash-pepper
+      CODE_PEPPER: ci-code-pepper-ci-code-pepper-ci-code-pepper
+      CSRF_SECRET: ci-csrf-secret-ci-csrf-secret-ci-csrf-secret
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries for WeasyPrint (Pango/HarfBuzz) and Noto fonts
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b fonts-noto-core
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.9"
+      - run: uv sync --frozen
+      - name: Lint and format
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Types
+        run: uv run mypy claimsathi
+      - name: Migrations apply cleanly and match the models
+        run: uv run alembic upgrade head && uv run alembic check
+      - name: Tests (unit + integration + authorization matrix)
+        run: uv run pytest
+      - name: Dependency audit
+        run: uv export --frozen --no-hashes --format requirements-txt > /tmp/req.txt && uvx pip-audit -r /tmp/req.txt
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web lint
+      - run: pnpm --filter web typecheck
+      - run: pnpm --filter web test
+      - run: pnpm --filter web build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Dependency audit (high and critical block)
+        run: pnpm audit --audit-level high
+
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

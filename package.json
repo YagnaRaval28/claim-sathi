@@ -1,0 +1,12 @@
+{
+  "name": "claimsathi",
+  "private": true,
+  "packageManager": "pnpm@10.34.7",
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "lint": "pnpm --filter web lint",
+    "typecheck": "pnpm --filter web typecheck",
+    "test": "pnpm --filter web test"
+  }
+}

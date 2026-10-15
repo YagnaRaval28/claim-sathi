@@ -1,0 +1,49 @@
+# Local development services (₹0, no cloud). See docs/00-governance/development-setup.md.
+# Host port 5433 is used because a native PostgreSQL may already listen on 5432.
+name: claimsathi
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: claimsathi
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:-claimsathi-local-only}
+      POSTGRES_DB: claimsathi
+    ports: ["5433:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data", "./infra/local/initdb:/docker-entrypoint-initdb.d:ro"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claimsathi -d claimsathi"]
+      interval: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest   # pin by digest after first pull (T-003)
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${LOCAL_MINIO_USER:-claimsathi}
+      MINIO_ROOT_PASSWORD: ${LOCAL_MINIO_PASSWORD:-claimsathi-local-only}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["miniodata:/data"]
+
+  mailpit:
+    image: axllent/mailpit:latest   # pin by digest after first pull (T-003)
+    ports: ["1025:1025", "8025:8025"]
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+      mailpit: { condition: service_started }
+    env_file: [.env]
+    environment:
+      SUPABASE_DB_URL: postgresql+psycopg://claimsathi:${LOCAL_DB_PASSWORD:-claimsathi-local-only}@postgres:5432/claimsathi
+      TEST_DATABASE_URL: postgresql+psycopg://claimsathi:${LOCAL_DB_PASSWORD:-claimsathi-local-only}@postgres:5432/claimsathi_test
+      STORAGE_S3_ENDPOINT: http://minio:9000
+      SMTP_HOST: mailpit
+    ports: ["8000:8000"]
+    profiles: ["api"]
+
+volumes:
+  pgdata:
+  miniodata:
