@@ -224,3 +224,39 @@ Full acceptance criteria are in `implementation-backlog.md` §3.
 | Cloud CLIs (gcloud, Terraform, Supabase) | ⏳ Not needed until M9 |
 | Legal reviewer, domain reviewer, native reviewers sourced | ❌ (D-H) |
 | Annotation guide, wording fixture, seeds | ❌ (CI-17 tasks) |
+
+---
+
+## 9. Decisions applied on 15 October 2026 (product owner: "use the recommended defaults")
+
+The product owner authorised development and approved the recommended answers in §4. They can be changed later.
+
+| Decision | Applied default | Where it shows up |
+|---|---|---|
+| D-A | Build to a closed beta; the validation sprint runs in parallel; the kill criterion still applies before public launch | Development started (M0–M3) |
+| D-B | Pending legal confirmation. Development uses **synthetic data only**, so no real document reaches any model. | `LLM_PROVIDER=fake` by default |
+| D-C | A domain is needed before the beta (email deliverability, OAuth). Not needed for local development. | M9 |
+| D-D | Local-first through M8; the GCP trial opens at M9; Gemini free tier with synthetic data only | `.env.example`, config guard (D-008) |
+| D-E | Beta caps: 3 open cases per user; global storage guard at 95%; NFR-011/014 treated as scale-up targets | `MAX_OPEN_CASES=3`, `STORAGE_GUARD_PCT=95` |
+| D-F | Gemini 2.5 Flash (Vertex, Mumbai), the ₹0 stack and custom authentication approved | system-design v1.1 |
+| D-G | v0 PRD archived | `docs/archive/PRD-v0-2026-10-12.md` |
+| D-H | Lawyer, domain reviewer and native reviewers to be sourced before M10 | Open |
+
+**Implementation choices made during M0–M3** (recorded so the docs stay accurate):
+
+- **Uploads go through the API** (the CI-04 default). No storage keys reach the browser. Direct TUS uploads remain the subject of spike S-2.
+- **The frontend uses a small in-house i18n module (about 40 lines) instead of next-intl.** Reason: Next.js 16 enables Cache Components by default, and next-intl's compatibility with it was not confirmed. The routes follow Next's documented `app/[lang]` pattern plus `proxy.ts`.
+- **TypeScript 5.x** is pinned, as chosen by `create-next-app@16.4.1`. This resolves CI-16.
+- **The initial Alembic migration (0001) was generated from the models with SQLAlchemy's PostgreSQL DDL compiler.** Later migrations use `--autogenerate` against a live database.
+- **Local and test knowledge are SYNTHETIC fixtures** (`eval/fixtures/knowledge`). RULE-MC-01 in prod stays `disabled_pending_verification` until the official IRDAI PDF is ingested and its quote verified.
+- **In VS-1 a found clause is shown as "Couldn't assess yet", never "appears valid".** No AI counter-point analysis has run yet (it arrives in M5).
+- **Local development without Docker** uses a native PostgreSQL (`infra/local/native-postgres-setup.sql`), because the Docker Desktop engine would not start on the developer machine. See development-setup §3a.
+- **Database sessions use SQLAlchemy's default `autoflush=True`.** With autoflush off, rows added in the same transaction were invisible to later queries. That caused duplicate `job_steps` rows and an unset `insurer_name`, both found by the integration suite.
+
+### 9.1 Open items found during the build (need a decision or follow-up)
+
+| ID | Item | Proposed resolution | Owner |
+|---|---|---|---|
+| OI-01 | `pnpm audit --audit-level high` reports GHSA-vfj7-8cjw-p6xm in `braces` (no patched version). It is reached only through `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch`, a **development-only** lint dependency that never sees user input. **The CI web audit step will fail** until this is resolved. | Product owner approves a time-boxed **waiver** (testing-strategy SEC-DEP-1): add `auditConfig.ignoreGhsas: [GHSA-vfj7-8cjw-p6xm]` to `pnpm-workspace.yaml` with a review date, and remove it when a patched release exists. Not applied without approval. | Product owner |
+| OI-02 | The web CSP has no `script-src` yet. Blocking inline scripts in Next.js needs per-request nonces, which force dynamic rendering and conflict with Cache Components and partial prerendering. The current CSP sets `frame-ancestors`, `base-uri`, `form-action` and `object-src`; the API CSP is strict (`default-src 'none'`). | Decide before M9: nonce-based CSP (dynamic rendering) or hash-based CSP via Next's SRI support. Until then SEC-XSS-1's "CSP blocks inline script" check cannot pass. | Engineering |
+| OI-03 | PDF export (WeasyPrint) cannot run on native Windows (no GTK/Pango). It runs in CI and in the API Docker image. | No change. Verify in the first CI run. | Engineering |

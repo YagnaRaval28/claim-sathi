@@ -4,7 +4,34 @@
 |---|---|
 | Date | 15 October 2026 |
 | Sources | PRD v1.1 §12 (epics), system-design v1.1 §C.10 (stages), testing-strategy §2 (test IDs), development-readiness §4 (decisions) |
-| Status | **Not started.** Development is authorised only after the product owner approves the readiness report (decisions D-A to D-F). |
+| Status | **In progress (15 Oct 2026).** Development authorised (readiness §9). M0–M3 code exists; see §0 for task status. |
+
+## 0. Progress (15 October 2026)
+
+Evidence: backend 64 tests passed and 1 failed (PDF render on native Windows, OI-03) against PostgreSQL 18; ruff, mypy, `alembic check` and pip-audit clean; web lint, typecheck, 8 Vitest tests and `next build` pass. CI has not run yet because the code is not pushed.
+
+| Task | Status | Notes |
+|---|---|---|
+| T-001, T-005 | Done | |
+| T-002 | Done, except `packages/design-tokens` | Tokens live as CSS variables in `apps/web/app/globals.css` |
+| T-003 | Written, **not verified** | Docker engine would not start. No `clamd` yet (M4). Images not yet pinned by digest. |
+| T-004 | Written, **not run** | Runs on the first push. The web audit step will fail until OI-01 is decided. |
+| S-1, S-2, S-5 | Not started | S-2 default applied (upload through the API). S-5 needs a Gemini dev key (synthetic data only). |
+| T-101, T-103, T-106, T-110, T-111 | Done | |
+| T-102 | Done, except Sentry | |
+| T-104 | Done, except `/readyz` | |
+| T-105 | Done, except web `script-src` | OI-02 |
+| T-107 | Not started | |
+| T-108 | Done, except the progress ETag | |
+| T-109 | Partial | `ObjectStore` (S3 and memory); no signed GET URLs yet (downloads go through the API) |
+| T-112 | Done with in-house i18n | gu and hi strings are drafts awaiting native review; no axe check yet |
+| T-201, T-203 | Done | |
+| T-202, T-205 | Not started | The authorization matrix is a hand-written test, not generated from OpenAPI |
+| T-204 | Done, except case PATCH | |
+| T-301 to T-304, T-306 | Done (fake AI) | |
+| T-305 | Partial | Synthetic text fixtures only; no PDF ingestion CLI and no real Master Circular yet |
+| T-307 | Done; PDF export unverified locally | OI-03 |
+| T-308 | Not started | Playwright E2E and the manual `gemini_dev` run |
 
 **Size key:** **S** is about 1 day or less, **M** about 2–4 days, **L** about 1 week or more. These are ESTIMATES for one developer with AI assistance.
 

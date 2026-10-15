@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Date | 15 October 2026 |
-| Status | **Specification.** No code exists yet. Commands in §6 onwards are *planned*: they become real when milestone M0 creates the files, and each is marked "to verify at T-00x". The tool versions in §1 were VERIFIED on the developer machine. |
+| Status | **In use (15 Oct 2026).** M0–M3 code exists. Commands marked VERIFIED were run on the developer machine (Windows 11, native PostgreSQL 18, no Docker). Others remain *planned*. |
 | Principle | **Local-first and ₹0.** Milestones M0–M8 need no cloud account (decision D-D, pending approval). |
 
 ---
@@ -14,11 +14,11 @@
 |---|---|---|---|
 | Git | ≥ 2.40 | 2.40.0 ✅ | — |
 | Node.js | 22 LTS line, ≥ 22.12 (Vitest 5 requirement) | 22.17.0 ✅ | — |
-| pnpm | Pin in `packageManager` at T-001 (10.x or 12.x) | ❌ not enabled | `corepack enable pnpm` |
+| pnpm | 10.34.7 (pinned in root `packageManager`) | via corepack ✅ | `corepack enable pnpm`, or run `corepack pnpm@10.34.7 <cmd>` without enabling |
 | Python | **3.12** | 3.13.5 / 3.11 present; 3.12 downloadable via uv ✅ | `uv python install 3.12` |
 | uv | ≥ 0.10 | 0.10.9 ✅ | — |
-| Docker Desktop (Compose v2+) | 29.x | 29.2.0 ✅ installed; **daemon not running** | Start Docker Desktop. On Windows, the WSL2 backend is recommended. |
-| psql (optional) | any | 18.1 ✅ | — |
+| Docker Desktop (Compose v2+) | 29.x | 29.2.0 installed; **engine does not start** (WSL `docker-desktop` distro stopped) | Optional. Without it, use the native path in §3a. |
+| PostgreSQL (native, alternative to Docker) | 16+ | 18.1 ✅ (port 5432) | See §3a |
 | gcloud, Terraform, Supabase CLI | — | ❌ | **Only from M9** (cloud) |
 | AWS CLI | v2 | 2.37.6 ✅ | Only for SES at M9 |
 
@@ -67,6 +67,23 @@ docker compose up -d          # to verify at T-003
 docker compose ps
 ```
 
+Compose maps Postgres to host port **5433** so it can run next to a native PostgreSQL on 5432 (`.env.example` uses 5433). MinIO and Mailpit are on `:latest` until their digests are pinned (T-003).
+
+### 3a. Without Docker: native PostgreSQL (VERIFIED 15 Oct 2026)
+
+1. As the postgres superuser, run the setup script once. It creates the `claimsathi` role and the `claimsathi` and `claimsathi_test` databases.
+
+   ```bash
+   psql -U postgres -h localhost -p 5432 -f infra/local/native-postgres-setup.sql
+   ```
+
+2. In `.env`, change the port in `SUPABASE_DB_URL` and `TEST_DATABASE_URL` from 5433 to **5432**.
+3. VS-1 needs no `vector` extension; the first migration does not create it. Embeddings arrive at M5, and a native install will need pgvector then.
+4. Storage and email without Docker:
+   - `STORAGE_BACKEND=memory` keeps uploads in the API process, so they are lost on restart. This is allowed only for `APP_ENV` `local` and `test`.
+   - Sign-in codes need an SMTP catcher. Run the Mailpit Windows binary (SMTP 1025, UI 8025), or use Docker for Mailpit only. **Do not** print codes to the console: logs never contain sign-in codes.
+5. PDF export (WeasyPrint) needs GTK/Pango, which native Windows lacks. Everything else runs natively. Export runs in CI and in the Docker image.
+
 ---
 
 ## 4. Environment variables
@@ -86,29 +103,32 @@ docker compose ps
 
 ---
 
-## 5. Database initialisation (planned; to verify at T-104)
+## 5. Database initialisation (VERIFIED on native PostgreSQL 18)
 
 ```bash
 cd apps/api
 uv sync
-uv run alembic upgrade head                      # schema, including the pgcrypto and vector extensions
-uv run python -m claimsathi.seeds --env local    # consent v1 (draft), rules, glossary (draft), bootstrap admin
-uv run python -m claimsathi.knowledge.ingest --file <master-circular.pdf> --type regulation --attest
-                                                 # admin-equivalent CLI for local development
+uv run alembic upgrade head && uv run alembic check   # check prints "No new upgrade operations detected."
+uv run python -m claimsathi.seeds --env local         # consent v1 (draft), rule patterns, SYNTHETIC knowledge fixtures
 ```
+
+- `--env local` and `--env test` seed the synthetic regulation and wording fixtures with RULE-MC-01 enabled.
+- `--env prod` keeps RULE-MC-01 `disabled_pending_verification` until the real Master Circular is ingested and attested.
+- The knowledge ingestion CLI for real PDFs is planned (M5). Until then, `knowledge.ingest.ingest_text()` is used by the seeds.
 
 **Test database:**
 
-- `TEST_DATABASE_URL` points to `claimsathi_test`.
-- The test fixtures create a fresh schema per session (`alembic upgrade head`) and wrap each test in a transaction that is rolled back.
+- `TEST_DATABASE_URL` points to `claimsathi_test`. If it is unset, integration tests are skipped; CI always sets it.
+- The fixtures rebuild the `public` schema once per session (`alembic upgrade head`), then truncate every table before each test.
 
 ---
 
-## 6. Start-up (planned; to verify at T-002 and T-005)
+## 6. Start-up
 
 ```bash
 # Terminal 1: API (Docker recommended on Windows because WeasyPrint needs Pango)
-docker compose up -d api          # or natively: cd apps/api && uv run uvicorn claimsathi.main_api:app --reload --port 8000
+docker compose --profile api up -d api   # or natively:
+cd apps/api && uv run uvicorn --factory claimsathi.main_api:create_app --reload --port 8000
 
 # Terminal 2: web
 cd apps/web && pnpm install && pnpm dev      # http://localhost:3000; /api/* is proxied to API_UPSTREAM_URL
@@ -116,7 +136,9 @@ cd apps/web && pnpm install && pnpm dev      # http://localhost:3000; /api/* is 
 
 **Background tasks locally:** `TASK_QUEUE=inprocess` runs task handlers in the API process after commit. This exercises the same outbox code path as Cloud Tasks.
 
-### Quality checks (planned; become the CI merge gate in testing strategy §6.1)
+### Quality checks (the CI merge gate, testing strategy §6.1)
+
+All rows except E2E, API contract and evaluation schema were VERIFIED on 15 Oct 2026. Those three are planned (T-107, T-308, M10).
 
 | Area | Command |
 |---|---|
@@ -124,6 +146,9 @@ cd apps/web && pnpm install && pnpm dev      # http://localhost:3000; /api/* is 
 | API types | `uv run mypy claimsathi` |
 | API tests | `uv run pytest -q` (unit + integration + authz + rule suites) |
 | Migrations | `uv run alembic upgrade head && uv run alembic check` |
+| API dependency audit | `uv export --frozen --no-hashes --format requirements-txt > req.txt && uvx pip-audit -r req.txt` |
+| Web dependency audit | `pnpm audit --audit-level high` |
+| Web build | `pnpm build` |
 | Web lint | `pnpm lint` |
 | Web types | `pnpm typecheck` (`tsc --noEmit`) |
 | Web unit tests | `pnpm test` (Vitest) |
@@ -157,9 +182,10 @@ cd apps/web && pnpm install && pnpm dev      # http://localhost:3000; /api/* is 
 | `failed to connect to the docker API … dockerDesktopLinuxEngine` | Docker Desktop not running (seen in this audit) | Start Docker Desktop and wait for "Engine running" |
 | `pnpm: command not found` | pnpm not enabled (seen in this audit) | `corepack enable pnpm` |
 | Wrong Python picked (3.13) | The system default is 3.13 | `uv python install 3.12`; `uv sync` respects `.python-version` |
-| WeasyPrint `OSError: cannot load library 'gobject'/'pango'` | Native Windows run without GTK | Run the API in Docker or WSL2 |
+| WeasyPrint `OSError: cannot load library 'gobject'/'pango'` (also `libgobject-2.0-0`) | Native Windows run without GTK | Run the API in Docker or WSL2. Only PDF export is affected. |
+| Engine never starts; `wsl -l -v` shows `docker-desktop` Stopped | Docker Desktop WSL backend broken | Restart Docker Desktop or run `wsl --shutdown`, then retry. Or use §3a. |
 | `extension "vector" is not available` | A non-pgvector Postgres image | Use the pgvector image in compose |
-| Port 5432 or 9000 in use | Local Postgres or MinIO already running | Stop the local service, or change the compose port mapping and `.env` |
+| Port 5433 or 9000 in use | Another Postgres or MinIO already running | Change the compose port mapping and `.env` |
 | API exits: `config error: FIELD_DATA_KEY missing` | `.env` not filled in | Generate the values per §4 |
 | Gemini free tier `429` | Free-tier rate limit | Lower concurrency; use `fake` for routine tests |
 | Next.js type-check errors after install | TypeScript major mismatch (CI-16) | Use the TypeScript version pinned at scaffold time |

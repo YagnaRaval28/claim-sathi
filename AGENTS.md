@@ -59,4 +59,4 @@ The v0 PRD is archived at `docs/archive/PRD-v0-2026-10-12.md` and is **SUPERSEDE
 
 ## Status
 
-**No application code exists yet.** Development starts only after the product owner approves `docs/00-governance/development-readiness.md`. The first task is **T-001**; the first vertical slice is **VS-1** (backlog §3).
+Development is authorised (`docs/00-governance/development-readiness.md` §9). Milestones M0–M3 (the VS-1 slice) are built in `apps/api` and `apps/web`. Task-by-task status is in backlog §0, and open items are in readiness §9.1. Local setup without Docker is in `docs/00-governance/development-setup.md` §3a.
