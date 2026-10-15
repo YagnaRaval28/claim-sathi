@@ -1,0 +1,13 @@
+Sample Health Insurance Co. Ltd. - Claim Settlement Advice
+SYNTHETIC TEST DOCUMENT - fictional insurer and people
+Claim No. SHI/CL/2026/000123
+Policy No. SHI/FL/0042/2025
+Patient: Ravi K. Mehta
+Date: 10/09/2026
+Amount claimed: Rs. 2,64,820
+Amount approved: Rs. 2,10,500
+Deductions:
+1) Room rent difference - proportionate deduction: Rs. 18,400 - as per policy terms.
+2) Consumables (gloves, masks, syringes): Rs. 6,250 - non-payable.
+3) Admission kit: Rs. 1,250 - non-payable.
+4) Doctor visit charges in excess of reasonable and customary charges: Rs. 28,420 - Clause 4.7.

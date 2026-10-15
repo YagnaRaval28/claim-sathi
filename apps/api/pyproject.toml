@@ -1,0 +1,65 @@
+[project]
+name = "claimsathi-api"
+version = "0.1.0"
+description = "ClaimSathi API and worker (FastAPI). See docs/03-architecture/system-design.md."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.143,<0.144",
+  "uvicorn[standard]>=0.54,<0.55",
+  "pydantic[email]>=2.14,<3",
+  "pydantic-settings>=2.6,<3",
+  "sqlalchemy>=2.1,<2.2",
+  "alembic>=1.20,<1.21",
+  "psycopg[binary]>=3.3,<3.4",
+  "structlog>=26.1,<27",
+  "httpx>=0.28,<0.29",
+  "boto3>=1.43,<2",
+  "pypdfium2>=5.14,<6",
+  "weasyprint>=70,<71",
+  "cryptography>=46",
+  "python-multipart>=0.0.20",
+  "google-genai>=2.31,<3",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.1,<10",
+  "pytest-cov>=6",
+  "ruff>=0.13",
+  "mypy>=1.18",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101", "RUF001", "RUF002", "RUF003"]  # asserts in tests; Indic/₹ characters are intentional
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are evaluated once per request by FastAPI, not at definition time.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Header", "fastapi.Query"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106"]
+"migrations/**" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["claimsathi.rules.*", "claimsathi.verify.*", "claimsathi.ai.*", "claimsathi.security.*", "claimsathi.auth.*"]
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "req(id): requirement ID covered by the test (traceability)",
+  "integration: needs Postgres via TEST_DATABASE_URL",
+]

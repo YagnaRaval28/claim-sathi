@@ -1,0 +1,32 @@
+{
+  "task": "extract_v1",
+  "fixture": "SYN-001 (synthetic). Recorded expected output used by the fake provider; it is not a measurement of any model.",
+  "match_all": ["SHI/CL/2026/000123", "Rs. 2,64,820"],
+  "response": {
+    "fields": [
+      {"name": "insurer", "value": "Sample Health Insurance Co. Ltd.", "line_ids": ["D1-p1-l1"]},
+      {"name": "claim_number", "value": "SHI/CL/2026/000123", "line_ids": ["D1-p1-l3"]},
+      {"name": "policy_number", "value": "SHI/FL/0042/2025", "line_ids": ["D1-p1-l4"]},
+      {"name": "patient_name", "value": "Ravi K. Mehta", "line_ids": ["D1-p1-l5"]},
+      {"name": "decision_letter_date", "value": "10/09/2026", "line_ids": ["D1-p1-l6"]},
+      {"name": "claimed_amount", "value": "Rs. 2,64,820", "line_ids": ["D1-p1-l7"]},
+      {"name": "paid_amount", "value": "Rs. 2,10,500", "line_ids": ["D1-p1-l8"]},
+      {"name": "decision_type", "value": "partly paid", "line_ids": ["D1-p1-l8"]}
+    ],
+    "line_items": [
+      {"description": "Room rent difference - proportionate deduction", "deducted_amount": "Rs. 18,400",
+       "billed_amount": null, "reason_verbatim": "as per policy terms", "clause_cited_verbatim": null,
+       "line_ids": ["D1-p1-l10"]},
+      {"description": "Consumables (gloves, masks, syringes)", "deducted_amount": "Rs. 6,250",
+       "billed_amount": null, "reason_verbatim": "non-payable", "clause_cited_verbatim": null,
+       "line_ids": ["D1-p1-l11"]},
+      {"description": "Admission kit", "deducted_amount": "Rs. 1,250", "billed_amount": null,
+       "reason_verbatim": "non-payable", "clause_cited_verbatim": null, "line_ids": ["D1-p1-l12"]},
+      {"description": "Doctor visit charges in excess of reasonable and customary charges",
+       "deducted_amount": "Rs. 28,420", "billed_amount": null,
+       "reason_verbatim": "in excess of reasonable and customary charges", "clause_cited_verbatim": "Clause 4.7",
+       "line_ids": ["D1-p1-l13"]}
+    ],
+    "reasons": []
+  }
+}

@@ -1,0 +1,6 @@
+SAMPLE-WORDING-001 version 1 - SYNTHETIC POLICY WORDING for Sample Health Insurance Co. Ltd. (fictional). FOR SOFTWARE TESTING ONLY.
+Clause 2.4(b) Room rent is payable up to 1% of the sum insured per day. Where a higher room category is chosen, associated medical expenses are payable in the same proportion.
+Clause 3.2 Specified illnesses, including cataract, are covered after 24 months of continuous coverage.
+Clause 4.7 Charges are payable only to the extent they are reasonable and customary, meaning the charge generally made for similar services by comparable providers in the same area.
+Clause 5.1 Items listed in Annexure I are not payable.
+Annexure I List of items not payable: gloves, masks, admission kit, toiletries.
