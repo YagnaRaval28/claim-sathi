@@ -71,6 +71,65 @@ jobs:
       - name: Dependency audit (high and critical block)
         run: pnpm audit --audit-level high
 
+  e2e:
+    # SCN-VS1 and MVP journeys in a real browser: web + API + Postgres + Mailpit, fake AI, SYNTHETIC letters only.
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: claimsathi
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: claimsathi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U claimsathi" --health-interval 3s --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.31.3
+        ports: ["1025:1025", "8025:8025"]
+    env:
+      APP_ENV: local
+      PUBLIC_BASE_URL: http://localhost:3000
+      SUPABASE_DB_URL: postgresql+psycopg://claimsathi:ci-only-password@localhost:5432/claimsathi
+      MIGRATION_DATABASE_URL: postgresql+psycopg://claimsathi:ci-only-password@localhost:5432/claimsathi
+      FIELD_DATA_KEY: a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=
+      HASH_PEPPER: ci-hash-pepper-ci-hash-pepper-ci-hash-pepper
+      CODE_PEPPER: ci-code-pepper-ci-code-pepper-ci-code-pepper
+      CSRF_SECRET: ci-csrf-secret-ci-csrf-secret-ci-csrf-secret
+      STORAGE_BACKEND: memory
+      MAILER: smtp
+      LLM_PROVIDER: fake
+      API_UPSTREAM_URL: http://127.0.0.1:8000
+      MAILPIT_URL: http://127.0.0.1:8025
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries for WeasyPrint (Pango/HarfBuzz) and Noto fonts
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b fonts-noto-core
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.9"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: API (migrate, seed synthetic data, start)
+        working-directory: apps/api
+        run: |
+          uv sync --frozen
+          uv run alembic upgrade head
+          uv run python -m claimsathi.seeds --env local
+          nohup uv run uvicorn --factory claimsathi.main_api:create_app --host 127.0.0.1 --port 8000 > /tmp/api.log 2>&1 &
+          curl -sf --retry 30 --retry-delay 1 --retry-connrefused http://127.0.0.1:8000/api/v1/healthz
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Browser end-to-end tests
+        run: pnpm --filter web e2e
+      - name: API log on failure (allowlisted fields only)
+        if: failure()
+        run: tail -200 /tmp/api.log
+
   secrets:
     runs-on: ubuntu-24.04
     steps:

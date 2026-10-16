@@ -1,0 +1,7 @@
+Sample Health Insurance Co. Ltd. - Claim Decision
+SYNTHETIC TEST DOCUMENT - fictional insurer and people
+Date: 02/07/2026
+Claim No. SHI/CL/2026/000456
+Amount claimed: Rs. 1,85,000
+Your claim for hospitalisation from 10/06/2026 is
+repudiated due to non-disclosure of pre-existing Diabetes Mellitus at the time of proposal.
