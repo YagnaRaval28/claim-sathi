@@ -81,7 +81,7 @@ Compose maps Postgres to host port **5433** so it can run next to a native Postg
 3. VS-1 needs no `vector` extension; the first migration does not create it. Embeddings arrive at M5, and a native install will need pgvector then.
 4. Storage and email without Docker:
    - `STORAGE_BACKEND=memory` keeps uploads in the API process, so they are lost on restart. This is allowed only for `APP_ENV` `local` and `test`.
-   - Sign-in codes need an SMTP catcher. Run the Mailpit Windows binary (SMTP 1025, UI 8025), or use Docker for Mailpit only. **Do not** print codes to the console: logs never contain sign-in codes.
+   - Sign-in codes need an SMTP catcher. Run the Mailpit Windows binary from its GitHub release, checked against the release's SHA-256 digest, with `mailpit.exe --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025`. Or use Docker for Mailpit only. **Do not** print codes to the console: logs never contain sign-in codes.
 5. PDF export (WeasyPrint) needs GTK/Pango, which native Windows lacks. Everything else runs natively. Export runs in CI and in the Docker image.
 
 ---
@@ -152,7 +152,7 @@ All rows except E2E, API contract and evaluation schema were VERIFIED on 15 Oct 
 | Web lint | `pnpm lint` |
 | Web types | `pnpm typecheck` (`tsc --noEmit`) |
 | Web unit tests | `pnpm test` (Vitest) |
-| E2E | `pnpm e2e` (Playwright, fake AI and OCR adapters) |
+| E2E | `pnpm --filter web e2e` (Playwright). Needs Mailpit and the API running; starts the web dev server if needed. Run `pnpm --filter web exec playwright install chromium` once. VERIFIED locally on 16 Oct 2026, except the PDF download on Windows (OI-03). |
 | API contract | `pnpm gen:api && git diff --exit-code packages/api-client` |
 | Evaluation schema | `uv run python -m eval.validate eval/fixtures/synthetic/cases.jsonl` |
 

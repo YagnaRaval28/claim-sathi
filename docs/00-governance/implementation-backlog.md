@@ -8,7 +8,12 @@
 
 ## 0. Progress (15 October 2026)
 
-Evidence: backend 64 tests passed and 1 failed (PDF render on native Windows, OI-03) against PostgreSQL 18; ruff, mypy, `alembic check` and pip-audit clean; web lint, typecheck, 8 Vitest tests and `next build` pass. CI has not run yet because the code is not pushed.
+Evidence (16 Oct 2026):
+
+- **Backend:** 69 tests passed and 1 failed against PostgreSQL 18. The failure is the PDF render on native Windows (OI-03), which now returns 503 `export_unavailable`. ruff, mypy and `alembic check` are clean.
+- **Web:** lint, typecheck, 15 Vitest tests and `next build` pass.
+- **Browser E2E (Playwright, local):** 4 of 5 journeys pass, covering a rejected claim, manual entry, sign-out and Gujarati. The partly-paid journey stops only at the PDF download (OI-03).
+- **CI** gains an `e2e` job on Linux, where the PDF render works. CI has not run yet because the code is not pushed.
 
 | Task | Status | Notes |
 |---|---|---|
@@ -31,7 +36,26 @@ Evidence: backend 64 tests passed and 1 failed (PDF render on native Windows, OI
 | T-301 to T-304, T-306 | Done (fake AI) | |
 | T-305 | Partial | Synthetic text fixtures only; no PDF ingestion CLI and no real Master Circular yet |
 | T-307 | Done; PDF export unverified locally | OI-03 |
-| T-308 | Not started | Playwright E2E and the manual `gemini_dev` run |
+| T-308 | Done, except the manual `gemini_dev` run | `apps/web/e2e/` covers partly paid (SYN-001), rejection (SYN-002), manual entry, sign-out and Gujarati |
+| Post-VS-1 fixes | Done | Listed in the 16 Oct audit fixes below |
+
+**16 Oct 2026 audit fixes** (found by browser testing and a frontend–backend contract review):
+
+- **Sign-in:** a valid code bounced the user back to sign-in because `useI18n()` returned new functions on every render. Fixed, along with the repeated `/me` calls it caused.
+- **Extraction timing:** Continue no longer opens the details page while extraction is still running. Required fields always show, so a letter the AI can't read can be typed in by hand.
+- **Details page:**
+  - typed amounts are read as rupees;
+  - the decision is chosen with radio buttons;
+  - deductions can be added, edited and removed;
+  - the page reloads after a version conflict.
+- **Rejected claims:** reasons with no clause cited get a finding and a letter. This adds the SYN-002 fixture and its recording.
+- **Background tasks:** a crashed task marks its document or analysis as failed instead of leaving it queued, and interrupted tasks resume when the API starts.
+- **Account and pages:**
+  - sign-out and **My cases** are in the header;
+  - pages show a retry instead of loading forever;
+  - the source sheet shows an error when a source fails to load;
+  - all error messages are translated into en, gu and hi;
+  - Accept-Language is read in q order.
 
 **Size key:** **S** is about 1 day or less, **M** about 2–4 days, **L** about 1 week or more. These are ESTIMATES for one developer with AI assistance.
 
