@@ -22,11 +22,17 @@ log = get_logger("jobs")
 
 Handler = Callable[[Session, dict[str, Any]], None]
 _HANDLERS: dict[str, Handler] = {}
+_ON_FAILURE: dict[str, Handler] = {}
 
 
-def task(name: str) -> Callable[[Handler], Handler]:
+def task(name: str, on_failure: Handler | None = None) -> Callable[[Handler], Handler]:
+    """Register a task handler. `on_failure` runs in a fresh transaction if the handler raises, so the user
+    sees a real "failed" state instead of work that stays queued forever."""
+
     def deco(fn: Handler) -> Handler:
         _HANDLERS[name] = fn
+        if on_failure is not None:
+            _ON_FAILURE[name] = on_failure
         return fn
 
     return deco
@@ -75,6 +81,15 @@ class Dispatcher:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._sf = session_factory
 
+    def requeue_interrupted(self) -> int:
+        """In-process mode only: tasks left "dispatched" by a stopped process are queued again on start-up."""
+        with self._sf() as s:
+            rows = s.scalars(select(Outbox).where(Outbox.status == "dispatched")).all()
+            for r in rows:
+                r.status = "pending"
+            s.commit()
+            return len(rows)
+
     def run_pending(self, max_tasks: int = 50) -> int:
         ran = 0
         for _ in range(max_tasks):
@@ -101,6 +116,14 @@ class Dispatcher:
             except Exception as exc:  # the class name only: messages can carry document content
                 log.error("task_failed", task=name, error_code=type(exc).__name__)
                 status = "failed"
+                hook = _ON_FAILURE.get(name)
+                if hook is not None:
+                    try:
+                        with self._sf() as s:
+                            hook(s, payload)
+                            s.commit()
+                    except Exception as hook_exc:
+                        log.error("task_failure_hook_failed", task=name, error_code=type(hook_exc).__name__)
             with self._sf() as s:
                 ob = s.get(Outbox, oid)
                 if ob is not None:

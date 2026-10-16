@@ -21,7 +21,7 @@ from claimsathi.core.errors import AppError
 from claimsathi.core.values import format_date_dmy, format_inr, parse_amount_paise, parse_date
 from claimsathi.documents.service import case_lines
 from claimsathi.jobs import Handler, step, task
-from claimsathi.models import Case, DecisionReason, ExtractedField, LineItem
+from claimsathi.models import Case, DecisionReason, ExtractedField, JobStep, LineItem, Outbox
 from claimsathi.verify.citations import normalise
 
 IDENTITY_FIELDS = {"patient_name", "policy_number", "claim_number"}
@@ -66,10 +66,19 @@ def apply_extraction(
     c: AppContext, s: Session, case: Case, result: ExtractionResult, lines: list[tuple[str, str]]
 ) -> None:
     by_id = dict(lines)
-    s.execute(delete(ExtractedField).where(ExtractedField.case_id == case.id))
+    user_set = set(
+        s.scalars(
+            select(ExtractedField.name).where(
+                ExtractedField.case_id == case.id, ExtractedField.status.in_(("user_entered", "unknown_by_user"))
+            )
+        )
+    )
+    s.execute(
+        delete(ExtractedField).where(ExtractedField.case_id == case.id, ExtractedField.name.not_in(user_set or {""}))
+    )
     s.execute(delete(LineItem).where(LineItem.case_id == case.id, LineItem.user_entered.is_(False)))
     s.execute(delete(DecisionReason).where(DecisionReason.case_id == case.id))
-    seen: set[str] = set()
+    seen: set[str] = set(user_set)  # a value the user typed always wins over a newly extracted one
     for f in result.fields:
         name = _store_name(f.name)
         if name in seen or f.value is None:
@@ -141,8 +150,24 @@ def apply_extraction(
     case.insurer_name = insurer
 
 
+def _extract_failed(s: Session, payload: dict[str, Any]) -> None:
+    case = s.get(Case, uuid.UUID(payload["case_id"]))
+    if case is None:
+        return
+    step(
+        s,
+        case_id=case.id,
+        job_kind="extraction",
+        job_ref=uuid.UUID(payload["after"]),
+        step_key="finding_details",
+        ordinal=2,
+        status="failed",
+        error_code="extraction_failed",
+    )
+
+
 def make_extract_handler(c: AppContext) -> Handler:
-    @task("case.extract")
+    @task("case.extract", on_failure=_extract_failed)
     def _extract(s: Session, payload: dict[str, Any]) -> None:
         case = s.get(Case, uuid.UUID(payload["case_id"]))
         if case is None or case.deleted_at is not None or case.fields_confirmed_at is not None:
@@ -197,6 +222,36 @@ def make_extract_handler(c: AppContext) -> Handler:
 # --- Facts API service ----------------------------------------------------------------------------
 
 
+def extraction_state(s: Session, case: Case) -> str:
+    """ "running" while a case.extract task is queued or in progress; else "failed", "done" or "none"."""
+    pending = s.scalar(
+        select(Outbox.id)
+        .where(
+            Outbox.task_name == "case.extract",
+            Outbox.dedupe_key.like(f"case.extract:{case.id}:%"),
+            Outbox.status.in_(("pending", "dispatched")),
+        )
+        .limit(1)
+    )
+    steps = s.scalars(select(JobStep).where(JobStep.case_id == case.id, JobStep.job_kind == "extraction")).all()
+    if pending is not None or any(st.status in ("waiting", "in_progress", "retrying") for st in steps):
+        return "running"
+    finished = [st for st in steps if st.finished_at is not None]
+    if not finished:
+        failed_outbox = s.scalar(
+            select(Outbox.id)
+            .where(
+                Outbox.task_name == "case.extract",
+                Outbox.dedupe_key.like(f"case.extract:{case.id}:%"),
+                Outbox.status == "failed",
+            )
+            .limit(1)
+        )
+        return "failed" if failed_outbox is not None else "none"
+    latest = max(finished, key=lambda st: st.finished_at or now_utc())
+    return "failed" if latest.status == "failed" else "done"
+
+
 def _display(name: str, value: str | None) -> str | None:
     if value is None:
         return None
@@ -208,10 +263,26 @@ def _display(name: str, value: str | None) -> str | None:
 
 def facts_view(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
     rows = {r.name: r for r in s.scalars(select(ExtractedField).where(ExtractedField.case_id == case.id))}
-    fields = []
+    partial = rows.get("decision_type") is not None and rows["decision_type"].value == "partial"
+    required = set(REQUIRED) | ({"paid_paise"} if partial else set())
+    fields: list[dict[str, Any]] = []
     for name in FIELD_ORDER:
         r = rows.get(name)
         if r is None:
+            if name in required or name == "paid_paise":
+                fields.append(
+                    {
+                        "name": name,
+                        "value": None,
+                        "display": None,
+                        "status": "not_found",
+                        "confidence_flag": "please_check" if name in required else "ok",
+                        "source_ref": None,
+                        "provenance": "document",
+                        "required": name in required,
+                        "confirmed": False,
+                    }
+                )
             continue
         val = c.cipher.decrypt(r.value_enc) if r.value_enc else r.value
         fields.append(
@@ -223,16 +294,21 @@ def facts_view(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
                 "confidence_flag": r.confidence_flag,
                 "source_ref": r.source_ref,
                 "provenance": "user" if r.status == "user_entered" else "document",
-                "required": name in REQUIRED,
+                "required": name in required,
                 "confirmed": r.confirmed_by_user,
             }
         )
-    return {"fields": fields, "confirmed": case.fields_confirmed_at is not None, "version": case.lock_version}
+    return {
+        "fields": fields,
+        "confirmed": case.fields_confirmed_at is not None,
+        "version": case.lock_version,
+        "extraction": extraction_state(s, case),
+    }
 
 
 def _validate_value(name: str, value: str) -> str:
     if name.endswith("_paise"):
-        p = parse_amount_paise(value) if not value.isdigit() else int(value)
+        p = parse_amount_paise(value)
         if p is None or p < 0:
             raise AppError(
                 "validation_error",

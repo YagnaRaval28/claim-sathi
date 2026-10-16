@@ -3,18 +3,19 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { CaseSteps, Disclaimer, PageTitle, ProblemNote } from "@/components/ui";
+import { Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useRequireUser } from "@/lib/use-session";
 import type { CaseSummary } from "@/lib/cases";
 
 const TYPES = ["decision_letter", "settlement_breakup", "policy_wording", "other"] as const;
+const READING = ["queued", "reading", "uploading", "scanning"];
 
 export default function Documents() {
   const { t, href } = useI18n();
   const { id } = useParams<{ id: string }>();
-  const me = useRequireUser();
+  const { me, gate } = useRequireUser();
   const [c, setC] = useState<CaseSummary | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [type, setType] = useState<string>("decision_letter");
@@ -24,12 +25,14 @@ export default function Documents() {
   const load = useCallback(() => api<CaseSummary>(`/cases/${id}`).then(setC).catch(setError), [id]);
   useEffect(() => { if (me) void load(); }, [me, load]);
 
-  const pending = c?.documents.some((d) => ["queued", "reading", "uploading", "scanning"].includes(d.status));
-  useEffect(() => {  // poll real status while documents are being read (design §7.6: no fake progress)
-    if (!pending) return;
-    const h = setInterval(() => void load(), 2500);
+  // Poll real task state while files are read and details extracted (design §7.6: no fake progress).
+  const reading = c?.documents.some((d) => READING.includes(d.status)) ?? false;
+  const extracting = c?.extraction === "running";
+  useEffect(() => {
+    if (!reading && !extracting) return;
+    const h = setInterval(() => void load(), 2000);
     return () => clearInterval(h);
-  }, [pending, load]);
+  }, [reading, extracting, load]);
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
@@ -51,10 +54,12 @@ export default function Documents() {
     }
   }
 
+  if (!me) return gate;
   const errMap = Object.fromEntries(
     ["duplicate_file", "payload_too_large", "unsupported_media_type", "case_upload_limit", "storage_full"]
       .map((k) => [k, t(`documents.errors.${k}`)]));
-  const ready = c?.documents.some((d) => d.type === "decision_letter" && d.status === "ready");
+  const letterReady = c?.documents.some((d) => d.type === "decision_letter" && d.status === "ready") ?? false;
+  const canContinue = letterReady && !reading && !extracting;
 
   return (
     <div className="page">
@@ -81,18 +86,20 @@ export default function Documents() {
       <ul aria-live="polite" style={{ listStyle: "none", padding: 0 }}>
         {c?.documents.map((d) => (
           <li key={d.id} className="card">
-            <strong>{t(`documents.types.${d.type}`) || d.type}</strong> · {t(`documents.status.${d.status}`)}
+            <strong>{t(`documents.types.${d.type}`)}</strong> · {t(`documents.status.${d.status}`)}
             {d.status_reason && <p className="field-error">{t(`documents.errors.${d.status_reason}`)}</p>}
           </li>
         ))}
       </ul>
+      {letterReady && extracting && <p aria-live="polite">{t("documents.extracting")}</p>}
+      {letterReady && c?.extraction === "failed" && <Callout tone="info">{t("documents.extractFailed")}</Callout>}
       <div className="action-bar">
-        {ready ? (
+        {canContinue ? (
           <Link className="btn btn-primary btn-block" href={href(`/cases/${id}/details`)}>{t("documents.continue")} →</Link>
         ) : (
           <>
             <button className="btn btn-primary btn-block" aria-disabled="true" disabled>{t("documents.continue")}</button>
-            <p className="muted">{pending ? t("documents.waiting") : t("documents.needLetter")}</p>
+            <p className="muted">{reading || extracting ? t("documents.waiting") : t("documents.needLetter")}</p>
           </>
         )}
       </div>

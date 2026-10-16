@@ -24,6 +24,7 @@ from claimsathi.models import (
     CounterPoint,
     DecisionReason,
     ExtractedField,
+    JobStep,
     KnowledgeChunk,
     KnowledgeSource,
     LineItem,
@@ -143,8 +144,17 @@ def _evidence_point(
     )
 
 
+def _analysis_failed(s: Session, payload: dict[str, Any]) -> None:
+    a = s.get(Analysis, uuid.UUID(payload["analysis_id"]))
+    if a is None or a.status not in ("queued", "running"):
+        return
+    a.status = "failed"
+    for st in s.scalars(select(JobStep).where(JobStep.job_ref == a.id, JobStep.status != "done")):
+        st.status, st.error_code, st.finished_at = "failed", "analysis_failed", now_utc()
+
+
 def make_analysis_handler() -> Handler:
-    @task("analysis.run")
+    @task("analysis.run", on_failure=_analysis_failed)
     def _run(s: Session, payload: dict[str, Any]) -> None:
         a = s.get(Analysis, uuid.UUID(payload["analysis_id"]))
         if a is None or a.status != "queued":
@@ -268,6 +278,9 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
             }
         )
     items = s.scalars(select(LineItem).where(LineItem.case_id == case.id).order_by(LineItem.ordinal)).all()
+    reasons = s.scalars(
+        select(DecisionReason).where(DecisionReason.case_id == case.id).order_by(DecisionReason.ordinal)
+    ).all()
     points_by_target: dict[uuid.UUID, list[str]] = {}
     for p in shown:
         points_by_target.setdefault(p.target_id, []).append(str(p.id))
@@ -308,6 +321,16 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
                 "include_by_default": li.audit_status in ("NO_CLAUSE_CITED", "CLAUSE_NOT_FOUND"),
             }
             for li in items
+        ],
+        "reasons": [
+            {
+                "id": str(r.id),
+                "text": r.text_verbatim,
+                "audit_status": r.audit_status,
+                "clause_cited_verbatim": r.clause_cited_verbatim,
+                "counter_point_ids": points_by_target.get(r.id, []),
+            }
+            for r in reasons
         ],
         "counter_points": [
             {

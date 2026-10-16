@@ -33,7 +33,7 @@ function Radios({ name, label, value, options, onChange, error }: {
 export default function NewCase() {
   const { t, href } = useI18n();
   const router = useRouter();
-  const me = useRequireUser();
+  const { me, gate } = useRequireUser();
   const [a, setA] = useState<Answers>({ complainant_name: "", nickname: "" });
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -62,7 +62,7 @@ export default function NewCase() {
     }
   }
 
-  if (!me) return <div className="page">{t("common.loading")}</div>;
+  if (!me) return gate;
   const yn: [string, string][] = [["yes", t("newCase.yes")], ["no", t("newCase.no")], ["not_sure", t("newCase.notSure")]];
   return (
     <form className="page reading" onSubmit={create} noValidate>

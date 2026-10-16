@@ -82,8 +82,25 @@ def read_pdf_lines(data: bytes) -> list[list[str]]:
         pdf.close()
 
 
+def _read_failed(s: Session, payload: dict[str, Any]) -> None:
+    doc = s.get(Document, uuid.UUID(payload["document_id"]))
+    if doc is None or doc.status not in ("queued", "reading"):
+        return
+    doc.status, doc.status_reason = "failed", "read_failed"
+    step(
+        s,
+        case_id=doc.case_id,
+        job_kind="document",
+        job_ref=doc.id,
+        step_key="reading",
+        ordinal=1,
+        status="failed",
+        error_code="read_failed",
+    )
+
+
 def make_read_handler(c: AppContext) -> Handler:
-    @task("doc.read")
+    @task("doc.read", on_failure=_read_failed)
     def _read(s: Session, payload: dict[str, Any]) -> None:
         doc = s.get(Document, uuid.UUID(payload["document_id"]))
         if doc is None or doc.status not in ("queued", "reading"):

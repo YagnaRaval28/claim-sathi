@@ -13,7 +13,7 @@ const FULL = { en: "English", gu: "ગુજરાતી", hi: "हिन्द�
 export default function Consent() {
   const { t, href, lang } = useI18n();
   const router = useRouter();
-  const me = useRequireUser({ needConsent: false });
+  const { me, gate } = useRequireUser({ needConsent: false });
   const [version, setVersion] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [reminders, setReminders] = useState(false);
@@ -37,7 +37,7 @@ export default function Consent() {
     }
   }
 
-  if (!me) return <div className="page">{t("common.loading")}</div>;
+  if (!me) return gate;
   return (
     <div className="page reading">
       <nav aria-label={t("language.title")} style={{ marginBottom: 16 }}>

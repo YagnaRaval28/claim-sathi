@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useRequireUser } from "@/lib/use-session";
 
@@ -13,9 +14,9 @@ type Letter = { id: string; version: number; reviewed_version: number | null; st
     synthetic: boolean }[]; disclaimer: string } };
 
 export default function LetterPage() {
-  const { t } = useI18n();
+  const { t, href } = useI18n();
   const { id } = useParams<{ id: string }>();
-  const me = useRequireUser();
+  const { me, gate } = useRequireUser();
   const [letter, setLetter] = useState<Letter | null>(null);
   const [read, setRead] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,7 +37,8 @@ export default function LetterPage() {
     setError(null);
     try {
       if (letter.reviewed_version !== letter.version) {
-        await api(`/letters/${letter.id}/review`, { body: { version: letter.version } });
+        const reviewed = await api<Letter>(`/letters/${letter.id}/review`, { body: { version: letter.version } });
+        setLetter(reviewed);
       }
       const exp = await api<{ download_path: string }>(`/letters/${letter.id}/exports`, { body: { format: "pdf" } });
       window.location.assign(exp.download_path);
@@ -44,11 +46,18 @@ export default function LetterPage() {
     setBusy(false);
   }
 
+  if (!me) return gate;
+  const stale = letter?.stale || (error instanceof ApiError && error.problem.code === "case_stale");
+
   return (
     <div className="page">
       <CaseSteps caseId={id} current="letter" />
       <PageTitle>{t("letter.title")}</PageTitle>
-      <ProblemNote error={error} />
+      {stale ? (
+        <Callout tone="warning">{t("letter.stale")}{" "}
+          <Link className="btn btn-secondary" href={href(`/cases/${id}/findings`)}>{t("letter.goFindings")}</Link>
+        </Callout>
+      ) : <ProblemNote error={error} />}
       {!letter && !error && <p>{t("letter.creating")}</p>}
       {letter && (
         <>
@@ -65,22 +74,24 @@ export default function LetterPage() {
             <hr />
             {letter.doc.footnotes.map((n) => (
               <p key={n.n} style={{ fontSize: 14 }}>[{n.n}] {n.source_title}, {n.clause_ref}, v{n.version}
-                {n.synthetic && " (SYNTHETIC test source)"}</p>
+                {n.synthetic && ` ${t("letter.syntheticSource")}`}</p>
             ))}
             <p className="muted">{letter.doc.disclaimer}</p>
           </article>
-          <div className="action-bar">
-            <label className="check">
-              <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} />
-              <span>{t("letter.read")}</span>
-            </label>
-            <button className="btn btn-primary btn-block" onClick={download} disabled={!read || busy}
-                    aria-disabled={!read || busy} aria-busy={busy}>
-              {busy ? t("letter.downloading") : t("letter.download")}
-            </button>
-            {!read && <p className="muted">{t("letter.readFirst")}</p>}
-            <p className="muted">{t("letter.sendNote")}</p>
-          </div>
+          {!stale && (
+            <div className="action-bar">
+              <label className="check">
+                <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} />
+                <span>{t("letter.read")}</span>
+              </label>
+              <button className="btn btn-primary btn-block" onClick={download} disabled={!read || busy}
+                      aria-disabled={!read || busy} aria-busy={busy}>
+                {busy ? t("letter.downloading") : t("letter.download")}
+              </button>
+              {!read && <p className="muted">{t("letter.readFirst")}</p>}
+              <p className="muted">{t("letter.sendNote")}</p>
+            </div>
+          )}
         </>
       )}
       <Disclaimer />

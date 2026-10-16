@@ -10,7 +10,7 @@ import { useRequireUser } from "@/lib/use-session";
 
 export default function Cases() {
   const { t, href } = useI18n();
-  const me = useRequireUser();
+  const { me, gate } = useRequireUser();
   const [cases, setCases] = useState<CaseSummary[] | null>(null);
   const [error, setError] = useState<unknown>(null);
 
@@ -18,6 +18,7 @@ export default function Cases() {
     if (me) api<{ items: CaseSummary[] }>("/cases").then((r) => setCases(r.items)).catch(setError);
   }, [me]);
 
+  if (!me) return gate;
   return (
     <div className="page">
       <PageTitle>{t("cases.title")}</PageTitle>

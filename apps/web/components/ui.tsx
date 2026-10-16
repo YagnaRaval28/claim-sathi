@@ -49,7 +49,7 @@ const STEPS = ["documents", "details", "findings", "letter"] as const;
 export function CaseSteps({ caseId, current }: { caseId: string; current: (typeof STEPS)[number] }) {
   const { t, href } = useI18n();
   return (
-    <ol className="steps" aria-label="Case steps">
+    <ol className="steps" aria-label={t("common.caseSteps")}>
       {STEPS.map((s, i) => (
         <li key={s} aria-current={s === current ? "step" : undefined}>
           <Link href={href(`/cases/${caseId}/${s}`)} style={{ color: "inherit", textDecoration: "none" }}>
@@ -72,12 +72,19 @@ export function PageTitle({ children }: { children: ReactNode }) {
   );
 }
 
+/** Error callout in the user's language: page-specific text, else the translated code, else a generic message.
+ * The API's English `detail` is never shown, so gu and hi screens stay in one language. */
 export function ProblemNote({ error, map }: { error: unknown; map?: Record<string, string> }) {
   const { t } = useI18n();
   if (!error) return null;
-  const code = error instanceof ApiError ? error.problem.code : "internal_error";
-  const msg = map?.[code] ?? (error instanceof ApiError && error.problem.detail) ?? t("common.error");
-  return <Callout tone="error">{msg}</Callout>;
+  return <Callout tone="error">{problemText(error, t, map)}</Callout>;
+}
+
+export function problemText(error: unknown, t: (key: string) => string, map?: Record<string, string>): string {
+  if (!(error instanceof ApiError)) return t("errors.network");
+  const code = error.problem.code;
+  const known = t(`errors.${code}`);
+  return map?.[code] || (known !== `errors.${code}` ? known : "") || t("common.error");
 }
 
 export function Disclaimer() {

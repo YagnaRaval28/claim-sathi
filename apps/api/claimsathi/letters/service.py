@@ -23,6 +23,7 @@ from claimsathi.models import (
     Case,
     Citation,
     CounterPoint,
+    DecisionReason,
     ExtractedField,
     KnowledgeChunk,
     KnowledgeSource,
@@ -59,8 +60,17 @@ def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list
     items = s.scalars(select(LineItem).where(LineItem.case_id == case.id).order_by(LineItem.ordinal)).all()
     default = [i for i in items if i.audit_status in ("NO_CLAUSE_CITED", "CLAUSE_NOT_FOUND")]
     chosen = [i for i in items if i.id in set(include_ids)] if include_ids is not None else default
-    if not chosen:
-        raise AppError("validation_error", 422, "Choose at least one deduction to include.")
+    reasons = [
+        r
+        for r in s.scalars(
+            select(DecisionReason).where(DecisionReason.case_id == case.id).order_by(DecisionReason.ordinal)
+        )
+        if r.audit_status in ("NO_CLAUSE_CITED", "CLAUSE_NOT_FOUND")
+    ]
+    if not chosen and not reasons:
+        raise AppError(
+            "validation_error", 422, "There is nothing in this decision that the basic letter can challenge yet."
+        )
     cited = s.execute(
         select(Citation, KnowledgeChunk, KnowledgeSource)
         .join(CounterPoint, CounterPoint.id == Citation.counter_point_id)
@@ -69,7 +79,7 @@ def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list
         .where(
             CounterPoint.analysis_id == a.id,
             CounterPoint.shown.is_(True),
-            CounterPoint.target_id.in_([i.id for i in chosen]),
+            CounterPoint.target_id.in_([i.id for i in chosen] + [r.id for r in reasons]),
             Citation.verified.is_(True),
         )
     ).all()
@@ -82,30 +92,53 @@ def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list
     name = c.cipher.decrypt(case.complainant_name_enc) if case.complainant_name_enc else "[your name]"
     item_list = "; ".join(f"{i.description} ({format_inr(i.deducted_paise)})" for i in chosen)
 
+    rejected = f.get("decision_type") == "repudiation"
+    what = "the rejection of" if rejected else "deductions in"
     blocks: list[dict[str, Any]] = [
         {"type": "meta", "text": f"Date: {format_date_dmy(today_ist())}"},
         {"type": "meta", "text": f"To: The Grievance Redressal Officer, {insurer}"},
         {
             "type": "subject",
-            "text": f"Subject: Request to review deductions in claim {claim_no} under policy {policy_no}",
+            "text": f"Subject: Request to review {what} claim {claim_no} under policy {policy_no}",
         },
         {"type": "para", "text": "Dear Sir or Madam,"},
     ]
-    facts_txt = f"My claim {claim_no} was settled"
+    facts_txt = f"My claim {claim_no} was {'rejected' if rejected else 'settled'}"
     if decision_date:
         facts_txt += f" by your letter dated {format_date_dmy(decision_date)}"
     claimed, paid = f.get("claimed_paise"), f.get("paid_paise")
-    if claimed and paid:
+    if claimed and paid and not rejected:
         facts_txt += (
             f". The amount claimed was {format_inr(int(claimed))} and the amount paid was {format_inr(int(paid))}"
         )
+    elif claimed:
+        facts_txt += f". The amount claimed was {format_inr(int(claimed))}"
     blocks.append({"type": "para", "text": facts_txt + "."})
     footnotes: list[dict[str, Any]] = []
-    ground = (
-        f"1. For the following deductions, your letter does not cite a specific term or condition of my "
-        f"policy: {item_list}. The total of these deductions is {format_inr(total)}."
-    )
-    blocks.append({"type": "para", "text": ground})
+    n = 0
+    if chosen:
+        n += 1
+        blocks.append(
+            {
+                "type": "para",
+                "text": (
+                    f"{n}. For the following deductions, your letter does not cite a specific term or condition of "
+                    f"my policy: {item_list}. The total of these deductions is {format_inr(total)}."
+                ),
+            }
+        )
+    if reasons:
+        n += 1
+        quoted = "; ".join(f"“{r.text_verbatim}”" for r in reasons)
+        blocks.append(
+            {
+                "type": "para",
+                "text": (
+                    f"{n}. Your letter gives the following reason for its decision but does not cite a specific term "
+                    f"or condition of my policy: {quoted}."
+                ),
+            }
+        )
     if cited:
         cit, ch, src = cited[0]
         footnotes.append(
@@ -128,13 +161,19 @@ def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list
                 "citation_id": str(cit.id),
             }
         )
+    first = (
+        "(a) reconsider your decision and settle my claim;"
+        if rejected
+        else f"(a) reconsider these deductions and pay {format_inr(total)};"
+    )
+    each = "reason for rejection" if rejected and not chosen else "deduction"
     blocks += [
         {"type": "para", "text": "I therefore request that you:"},
         {
             "type": "list",
             "items": [
-                f"(a) reconsider these deductions and pay {format_inr(total)};",
-                "(b) state, for each deduction, the specific term or condition of the policy relied on;",
+                first,
+                f"(b) state, for each {each}, the specific term or condition of the policy relied on;",
                 "(c) reply to me in writing.",
             ],
         },
@@ -143,7 +182,12 @@ def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list
         {"type": "signature", "text": name},
     ]
     _check_numbers(
-        blocks, f, cited, chosen=chosen, total=total, extra={claim_no, policy_no, format_date_dmy(today_ist())}
+        blocks,
+        f,
+        cited,
+        chosen=chosen,
+        total=total,
+        extra={claim_no, policy_no, format_date_dmy(today_ist()), *(r.text_verbatim for r in reasons)},
     )
     letter = Letter(
         case_id=case.id,
@@ -151,7 +195,7 @@ def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list
         stage="S1",
         language="en",
         basic_mode=True,
-        included={"line_item_ids": [str(i.id) for i in chosen]},
+        included={"line_item_ids": [str(i.id) for i in chosen], "reason_ids": [str(r.id) for r in reasons]},
         doc={"blocks": blocks, "footnotes": footnotes, "disclaimer": DISCLAIMER},
         version=1,
     )
@@ -179,7 +223,7 @@ def _check_numbers(
 ) -> None:
     """AI-005 safety net: every number in the letter must come from confirmed facts, chosen deductions,
     the cited chunk or the system-provided extras. No shortcut path exists."""
-    allowed: set[str] = {"1"}  # the ground's own paragraph number
+    allowed: set[str] = {"1", "2"}  # the grounds' own paragraph numbers
     for name, v in f.items():
         if not v:
             continue
@@ -242,9 +286,12 @@ def export_pdf(c: AppContext, s: Session, letter: Letter, case: Case) -> LetterE
     )
     if existing is not None:
         return existing
-    from claimsathi.letters.render import render_pdf
+    from claimsathi.letters.render import RendererUnavailable, render_pdf
 
-    data = render_pdf(letter.doc)
+    try:
+        data = render_pdf(letter.doc)
+    except RendererUnavailable as exc:
+        raise AppError("export_unavailable", 503, "PDF download isn't available on this server right now.") from exc
     key = f"cases/{case.id}/letters/{letter.id}/v{letter.version}.pdf"
     c.store.put(key, data, "application/pdf")
     exp = LetterExport(

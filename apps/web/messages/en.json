@@ -10,7 +10,10 @@
     "disclaimer": "ClaimSathi is a self-help drafting tool, not legal advice. You send everything yourself.",
     "freeChannels": "Your insurer's grievance officer, Bima Bharosa and the Insurance Ombudsman are free. Never pay anyone claiming to be the Ombudsman.",
     "skip": "Skip to content",
-    "language": "Language"
+    "language": "Language",
+    "myCases": "My cases",
+    "homeLabel": "ClaimSathi home",
+    "caseSteps": "Case steps"
   },
   "home": {
     "title": "Health claim cut or rejected?",
@@ -137,8 +140,13 @@
       "unsupported_media_type": "Only PDF files are supported in this version.",
       "case_upload_limit": "This case has reached its upload limit.",
       "storage_full": "Uploads are paused for a while. Please try again later.",
-      "no_text_layer": "This PDF has no readable text (it may be a scan). Photo and scan support is coming."
-    }
+      "no_text_layer": "This PDF has no readable text (it may be a scan). Photo and scan support is coming.",
+      "unreadable_pdf": "This PDF couldn't be opened. Try saving it again or uploading another copy.",
+      "too_many_pages": "This file has too many pages (60 is the limit for a case).",
+      "read_failed": "Something went wrong while reading this file. Please upload it again."
+    },
+    "extracting": "Finding the details in your letter…",
+    "extractFailed": "We couldn't read the details automatically. You can type them in on the next screen."
   },
   "details": {
     "title": "Check what we read",
@@ -159,7 +167,10 @@
     "deductionsConfirmed": "Deductions confirmed",
     "clauseCited": "Clause cited",
     "noClause": "None",
-    "decisionTypes": { "partial": "Partly paid", "repudiation": "Rejected" },
+    "decisionTypes": {
+      "partial": "Partly paid",
+      "repudiation": "Rejected"
+    },
     "fields": {
       "insurer": "Insurer",
       "tpa": "TPA",
@@ -177,7 +188,23 @@
       "disallowed_paise": "Amount deducted",
       "decision_letter_date": "Date of insurer's letter",
       "decision_type": "Decision"
-    }
+    },
+    "extracting": "Still finding details in your letter. This page updates by itself.",
+    "extractFailed": "We couldn't read the details automatically. Please type them in.",
+    "amountHint": "In rupees, for example 2,64,820",
+    "dateHint": "DD/MM/YYYY, for example 10/09/2026",
+    "required": "Required",
+    "editDeductions": "Edit deductions",
+    "addDeduction": "+ Add a deduction",
+    "deductionDescription": "What was deducted",
+    "deductionAmount": "Amount deducted (₹)",
+    "deductionClause": "Clause cited in the letter (if any)",
+    "remove": "Remove",
+    "saveDeductions": "Save deductions",
+    "noDeductions": "No deductions listed. Add them if your insurer's letter lists any.",
+    "invalidAmount": "Enter an amount in rupees, like 6,250.",
+    "needDescription": "Describe what was deducted.",
+    "reasons": "Reasons the insurer gave"
   },
   "findings": {
     "title": "Findings",
@@ -199,14 +226,22 @@
       "CLAUSE_NOT_FOUND": "Cited clause not found",
       "CLAUSE_FOUND_QUESTIONABLE": "Clause found, may not apply",
       "CLAUSE_FOUND_APPEARS_VALID": "Appears consistent with policy",
-      "CANNOT_ASSESS": "Couldn't assess yet"
+      "CANNOT_ASSESS": "Couldn't assess yet",
+      "PENDING": "Not checked yet"
     },
     "cannotAssessHelp": "The clause exists in your policy wording. A detailed check of whether it applies is coming in a later version.",
     "steps": {
       "checking_wording": "Matching your policy wording",
       "checking_deductions": "Checking deductions",
       "checking_sources": "Checking every quote"
-    }
+    },
+    "failed": "The check didn't finish. Please try again.",
+    "runAgain": "Check again",
+    "rejectionSummary": "Your insurer rejected your claim of {claimed}.",
+    "reasons": "Reasons given for the decision",
+    "reasonNoClauseSummary": "{count} reasons have no specific policy clause cited.",
+    "sourceError": "Couldn't load this source. Please try again.",
+    "nothingToChallenge": "We didn't find anything the basic letter can challenge yet."
   },
   "provenance": {
     "verified": "Verified quote",
@@ -223,6 +258,37 @@
     "download": "Download PDF",
     "downloading": "Preparing PDF…",
     "readFirst": "Please tick the box after reading the letter.",
-    "sendNote": "You send this letter yourself, by email or post, to your insurer's grievance officer."
+    "sendNote": "You send this letter yourself, by email or post, to your insurer's grievance officer.",
+    "syntheticSource": "(SYNTHETIC test source)",
+    "stale": "Your details changed after this letter was written. Update the findings, then come back.",
+    "goFindings": "Go to findings"
+  },
+  "errors": {
+    "network": "Couldn't reach ClaimSathi. Check your connection and try again.",
+    "internal_error": "Something went wrong. Please try again.",
+    "validation_error": "Please check what you entered.",
+    "not_found": "This item isn't available.",
+    "unauthenticated": "Please sign in again.",
+    "consent_required": "Please give your consent before we read documents.",
+    "csrf_failed": "Your session expired. Reload the page and try again.",
+    "rate_limited": "Too many attempts. Please wait and try again.",
+    "version_conflict": "These details changed in another tab. We've reloaded the latest version.",
+    "case_stale": "Your details changed. Update the findings first.",
+    "fields_not_confirmed": "Confirm your case details first.",
+    "line_items_not_confirmed": "Confirm the list of deductions first.",
+    "required_fields_missing": "Some required details are missing.",
+    "letter_not_reviewed": "Please read the letter and tick the box first.",
+    "export_unavailable": "PDF download isn't available right now. You can copy the letter text from this page.",
+    "open_case_limit": "You have reached the open-case limit. Close a case to start another.",
+    "out_of_scope": "ClaimSathi only helps with health insurance claims in India.",
+    "idempotency_key_reused": "This request was already sent. Reload the page.",
+    "duplicate_file": "You've already added this file.",
+    "case_upload_limit": "This case has reached its upload limit.",
+    "payload_too_large": "This file is too large. The limit is 20 MB.",
+    "unsupported_media_type": "Only PDF files are supported in this version.",
+    "storage_full": "Uploads are paused for a while. Please try again later.",
+    "email_code_invalid": "That code isn't right.",
+    "email_code_expired": "This code has expired. Send a new one.",
+    "ai_paused_budget": "Automatic reading is paused for now. You can type your details in."
   }
 }

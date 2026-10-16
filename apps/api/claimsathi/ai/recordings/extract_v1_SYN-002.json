@@ -1,0 +1,20 @@
+{
+  "task": "extract_v1",
+  "fixture": "SYN-002 (synthetic repudiation). Recorded expected output used by the fake provider; it is not a measurement of any model.",
+  "match_all": ["SHI/CL/2026/000456", "repudiated due to non-disclosure"],
+  "response": {
+    "fields": [
+      {"name": "insurer", "value": "Sample Health Insurance Co. Ltd.", "line_ids": ["D1-p1-l1"]},
+      {"name": "decision_letter_date", "value": "02/07/2026", "line_ids": ["D1-p1-l3"]},
+      {"name": "claim_number", "value": "SHI/CL/2026/000456", "line_ids": ["D1-p1-l4"]},
+      {"name": "claimed_amount", "value": "Rs. 1,85,000", "line_ids": ["D1-p1-l5"]},
+      {"name": "admission_date", "value": "10/06/2026", "line_ids": ["D1-p1-l6"]},
+      {"name": "decision_type", "value": "repudiated", "line_ids": ["D1-p1-l7"]}
+    ],
+    "line_items": [],
+    "reasons": [
+      {"text_verbatim": "repudiated due to non-disclosure of pre-existing Diabetes Mellitus at the time of proposal",
+       "clause_cited_verbatim": null, "line_ids": ["D1-p1-l7"]}
+    ]
+  }
+}

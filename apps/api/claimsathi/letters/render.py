@@ -49,8 +49,15 @@ def letter_html(doc: dict[str, Any]) -> str:
     )
 
 
+class RendererUnavailable(RuntimeError):
+    """WeasyPrint's native libraries (Pango/GObject) are missing, e.g. native Windows without GTK."""
+
+
 def render_pdf(doc: dict[str, Any]) -> bytes:
-    from weasyprint import HTML
+    try:
+        from weasyprint import HTML
+    except OSError as exc:  # raised when libgobject/libpango cannot be loaded
+        raise RendererUnavailable(type(exc).__name__) from exc
 
     pdf: bytes = HTML(string=letter_html(doc)).write_pdf()
     return pdf

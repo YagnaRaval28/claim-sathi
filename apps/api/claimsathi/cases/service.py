@@ -71,6 +71,8 @@ def create_case(c: AppContext, s: Session, user: User, body: CaseCreate) -> Case
 
 
 def case_summary(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
+    from claimsathi.extraction.service import extraction_state  # local import avoids an import cycle
+
     docs = s.scalars(select(Document).where(Document.case_id == case.id).order_by(Document.created_at)).all()
     return {
         "id": str(case.id),
@@ -85,6 +87,7 @@ def case_summary(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
             "line_items_confirmed": case.line_items_confirmed_at is not None,
             "stale": case.stale_since is not None,
         },
+        "extraction": extraction_state(s, case),
         "documents": [
             {
                 "id": str(d.id),
@@ -107,4 +110,10 @@ def progress(s: Session, case: Case) -> dict[str, Any]:
     for st in steps:
         j = jobs.setdefault(str(st.job_ref), {"kind": st.job_kind, "ref_id": str(st.job_ref), "steps": []})
         j["steps"].append({"key": st.step_key, "status": st.status, "attempt": st.attempt, "error_code": st.error_code})
-    return {"jobs": list(jobs.values())}
+
+    # Jobs in run order (job_ref is a random id): jobs that have not started yet come last.
+    def started(j: dict[str, Any]) -> tuple[int, str]:
+        times = [st.started_at for st in steps if str(st.job_ref) == j["ref_id"] and st.started_at is not None]
+        return (0, min(times).isoformat()) if times else (1, "")
+
+    return {"jobs": sorted(jobs.values(), key=started)}

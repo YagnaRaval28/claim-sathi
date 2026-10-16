@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
@@ -79,7 +81,20 @@ def create_app(context: AppContext | None = None) -> FastAPI:
     make_extract_handler(c)
     make_analysis_handler()
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # In-process queue: finish work that a stopped process left behind (tests drive tasks explicitly).
+        if settings.task_queue == "inprocess" and settings.app_env != "test":
+
+            def resume() -> None:
+                c.dispatcher.requeue_interrupted()
+                c.dispatcher.run_pending()
+
+            threading.Thread(target=resume, name="resume-tasks", daemon=True).start()
+        yield
+
     app = FastAPI(
+        lifespan=lifespan,
         title="ClaimSathi API",
         version="0.1.0",
         docs_url=None if settings.app_env == "prod" else "/docs",

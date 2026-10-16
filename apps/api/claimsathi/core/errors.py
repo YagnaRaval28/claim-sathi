@@ -37,6 +37,7 @@ TITLES: dict[str, str] = {
     "storage_full": "Storage temporarily full",
     "out_of_scope": "Outside ClaimSathi's scope",
     "ai_paused_budget": "AI features paused",
+    "export_unavailable": "PDF export unavailable",
     "internal_error": "Something went wrong",
 }
 
