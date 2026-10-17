@@ -1,4 +1,5 @@
 SAMPLE REGULATION 001 - SYNTHETIC TEST TEXT. THIS IS NOT A REAL REGULATION. FOR SOFTWARE TESTING ONLY.
+Para 13 After 60 months of continuous coverage under a policy, no claim shall be contested by the insurer on the ground of non-disclosure or misrepresentation, except on the ground of established fraud.
 Para 17 Claims settlement in this synthetic regulation.
 Para 17(a) No claim shall be fully rejected by an insurer under this synthetic regulation without the approval of its claims review panel.
 Para 17(b) Where a claim is rejected, or any part of a claim is disallowed, the insurer shall inform the claimant in writing and shall give reference to the specific terms and conditions of the policy document relied upon for each amount disallowed.

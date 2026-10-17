@@ -46,6 +46,47 @@ def _facts(c: AppContext, s: Session, case: Case) -> dict[str, str | None]:
     return out
 
 
+RULE_POINTS = ("RULE-MC-02", "RULE-MC-03", "RULE-MC-05")
+# Deterministic ground paragraphs for rule findings: (to the insurer, to the Ombudsman). No model writes these.
+RULE_GROUND_TEXT = {
+    "RULE-MC-02": (
+        "My claim was fully rejected. The applicable rule requires the approval of your claims review committee "
+        "for a full rejection.",
+        "The claim was fully rejected. The applicable rule requires the approval of the insurer's claims review "
+        "committee for a full rejection.",
+    ),
+    "RULE-MC-03": (
+        "My policy had more than 60 months of continuous cover before this admission, so this claim cannot be "
+        "contested for non-disclosure except for established fraud.",
+        "The policy had more than 60 months of continuous cover before this admission, so the claim cannot be "
+        "contested for non-disclosure except for established fraud.",
+    ),
+    "RULE-MC-05": (
+        "If any hospital documents are missing, the applicable rule says you should collect them directly from "
+        "the hospital.",
+        "If any hospital documents were missing, the applicable rule says the insurer should have collected them "
+        "directly from the hospital.",
+    ),
+}
+# English names of checklist items for enclosure lists (FR-018 AC2); keys come from the RULE-EVIDENCE map.
+EVIDENCE_LABELS_EN = {
+    "decision_letter": "the insurer's decision letter",
+    "policy_schedule": "my policy schedule",
+    "policy_wording": "the policy wording",
+    "discharge_summary": "the discharge summary",
+    "final_bill": "the final hospital bill",
+    "doctor_certificate_first_diagnosis": "a certificate from my treating doctor stating the date of first diagnosis",
+    "previous_policy_schedules": "my earlier policy schedules showing continuous cover",
+    "hospital_tariff_sheet": "the hospital tariff sheet",
+    "room_category_record": "the record of my room category",
+    "itemised_hospital_bill": "the itemised hospital bill",
+    "treating_doctor_note_necessity": "my treating doctor's note on why the treatment was needed",
+    "proof_documents_submitted": "proof of the documents I submitted",
+    "intimation_proof": "proof of when I informed the insurer",
+    "premium_payment_receipts": "my premium payment receipts",
+}
+
+
 @dataclass
 class _Material:
     """Confirmed facts and verified grounds shared by the Stage-1 letter and the Ombudsman complaint."""
@@ -53,8 +94,9 @@ class _Material:
     analysis: Analysis
     f: dict[str, str | None]
     chosen: list[LineItem]
-    reasons: list[DecisionReason]
-    cited: list[Any]
+    reasons: list[DecisionReason]  # reasons that cite no clause
+    rule_points: list[Any]  # (CounterPoint, Citation, KnowledgeChunk, KnowledgeSource) for RULE-MC-02/03/05
+    cited: list[Any]  # (Citation, KnowledgeChunk, KnowledgeSource, CounterPoint) for every included ground
     total: int
     insurer: str
     claim_no: str
@@ -62,9 +104,16 @@ class _Material:
     name: str
     rejected: bool
     decision_date: date | None
+    enclosures: list[str]
+
+    @property
+    def asks_committee(self) -> bool:
+        return any(row[0].rule_key == "RULE-MC-02" for row in self.rule_points)
 
 
 def _gather(c: AppContext, s: Session, case: Case, include_ids: list[uuid.UUID] | None) -> _Material:
+    from claimsathi.checklist.service import obtained_items
+
     a = s.scalar(
         select(Analysis)
         .where(Analysis.case_id == case.id, Analysis.status == "succeeded")
@@ -79,37 +128,39 @@ def _gather(c: AppContext, s: Session, case: Case, include_ids: list[uuid.UUID] 
     items = s.scalars(select(LineItem).where(LineItem.case_id == case.id).order_by(LineItem.ordinal)).all()
     default = [i for i in items if i.audit_status in ("NO_CLAUSE_CITED", "CLAUSE_NOT_FOUND")]
     chosen = [i for i in items if i.id in set(include_ids)] if include_ids is not None else default
-    reasons = [
-        r
-        for r in s.scalars(
-            select(DecisionReason).where(DecisionReason.case_id == case.id).order_by(DecisionReason.ordinal)
+    all_reasons = list(
+        s.scalars(select(DecisionReason).where(DecisionReason.case_id == case.id).order_by(DecisionReason.ordinal))
+    )
+    reasons = [r for r in all_reasons if r.audit_status in ("NO_CLAUSE_CITED", "CLAUSE_NOT_FOUND")]
+    rows = s.execute(
+        select(Citation, KnowledgeChunk, KnowledgeSource, CounterPoint)
+        .join(CounterPoint, CounterPoint.id == Citation.counter_point_id)
+        .join(KnowledgeChunk, KnowledgeChunk.id == Citation.chunk_id)
+        .join(KnowledgeSource, KnowledgeSource.id == KnowledgeChunk.source_id)
+        .where(
+            CounterPoint.analysis_id == a.id,
+            CounterPoint.shown.is_(True),
+            Citation.verified.is_(True),
         )
-        if r.audit_status in ("NO_CLAUSE_CITED", "CLAUSE_NOT_FOUND")
+        .order_by(CounterPoint.ordinal)
+    ).all()
+    reason_ids = {r.id for r in all_reasons}
+    rule_points = [
+        (cp, cit, ch, src) for cit, ch, src, cp in rows if cp.rule_key in RULE_POINTS and cp.target_id in reason_ids
     ]
-    if not chosen and not reasons:
+    if not chosen and not reasons and not rule_points:
         raise AppError(
             "validation_error", 422, "There is nothing in this decision that the basic letter can challenge yet."
         )
-    cited = list(
-        s.execute(
-            select(Citation, KnowledgeChunk, KnowledgeSource)
-            .join(CounterPoint, CounterPoint.id == Citation.counter_point_id)
-            .join(KnowledgeChunk, KnowledgeChunk.id == Citation.chunk_id)
-            .join(KnowledgeSource, KnowledgeSource.id == KnowledgeChunk.source_id)
-            .where(
-                CounterPoint.analysis_id == a.id,
-                CounterPoint.shown.is_(True),
-                CounterPoint.target_id.in_([i.id for i in chosen] + [r.id for r in reasons]),
-                Citation.verified.is_(True),
-            )
-        ).all()
-    )
+    included = {i.id for i in chosen} | {r.id for r in reasons} | {row[0].target_id for row in rule_points}
+    cited = [(cit, ch, src, cp) for cit, ch, src, cp in rows if cp.target_id in included]
     raw_date = f.get("decision_letter_date")
     return _Material(
         analysis=a,
         f=f,
         chosen=chosen,
         reasons=reasons,
+        rule_points=rule_points,
         cited=cited,
         total=sum(i.deducted_paise for i in chosen),
         insurer=f.get("insurer") or "the insurer",
@@ -118,11 +169,35 @@ def _gather(c: AppContext, s: Session, case: Case, include_ids: list[uuid.UUID] 
         name=c.cipher.decrypt(case.complainant_name_enc) if case.complainant_name_enc else "[your name]",
         rejected=f.get("decision_type") == "repudiation",
         decision_date=date.fromisoformat(raw_date) if raw_date else None,
+        enclosures=[k for k in obtained_items(s, case) if k in EVIDENCE_LABELS_EN and k != "decision_letter"],
     )
 
 
-def _grounds(m: _Material, *, insurer_ref: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Numbered grounds (one per NO_CLAUSE_CITED group) plus the verified quote and its footnote."""
+def _quote_block(cit: Any, ch: Any, src: Any, n: int) -> tuple[dict[str, Any], dict[str, Any]]:
+    note = {
+        "n": n,
+        "citation_id": str(cit.id),
+        "chunk_id": str(ch.id),
+        "source_title": src.title,
+        "clause_ref": ch.clause_ref,
+        "version": src.version,
+        "synthetic": src.synthetic,
+    }
+    block = {
+        "type": "quote",
+        "text": f"The applicable rule states: “{cit.quote}”",
+        "footnote": n,
+        "quote": cit.quote,
+        "citation_id": str(cit.id),
+    }
+    return block, note
+
+
+def _grounds(
+    m: _Material, *, insurer_ref: str, to_insurer: bool = True
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Numbered grounds: the NO_CLAUSE_CITED groups (Para 17(b) quote), then one per rule finding, each with its
+    own verified quote and footnote."""
     blocks: list[dict[str, Any]] = []
     footnotes: list[dict[str, Any]] = []
     n = 0
@@ -150,28 +225,22 @@ def _grounds(m: _Material, *, insurer_ref: str) -> tuple[list[dict[str, Any]], l
                 ),
             }
         )
-    if m.cited:
-        cit, ch, src = m.cited[0]
-        footnotes.append(
-            {
-                "n": 1,
-                "citation_id": str(cit.id),
-                "chunk_id": str(ch.id),
-                "source_title": src.title,
-                "clause_ref": ch.clause_ref,
-                "version": src.version,
-                "synthetic": src.synthetic,
-            }
-        )
-        blocks.append(
-            {
-                "type": "quote",
-                "text": f"The applicable rule states: “{cit.quote}”",
-                "footnote": 1,
-                "quote": cit.quote,
-                "citation_id": str(cit.id),
-            }
-        )
+    mc01 = next((row for row in m.cited if row[3].rule_key == "RULE-MC-01"), None)
+    if mc01 is not None and (m.chosen or m.reasons):
+        block, note = _quote_block(mc01[0], mc01[1], mc01[2], len(footnotes) + 1)
+        blocks.append(block)
+        footnotes.append(note)
+    done: set[str] = set()
+    for cp, cit, ch, src in m.rule_points:
+        if cp.rule_key in done:
+            continue  # one paragraph per rule, even when several reasons trigger it
+        done.add(cp.rule_key)
+        n += 1
+        text = RULE_GROUND_TEXT[cp.rule_key][0 if to_insurer else 1]
+        blocks.append({"type": "para", "text": f"{n}. {text}"})
+        block, note = _quote_block(cit, ch, src, len(footnotes) + 1)
+        blocks.append(block)
+        footnotes.append(note)
     return blocks, footnotes
 
 
@@ -208,17 +277,15 @@ def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list
         else f"(a) reconsider these deductions and pay {format_inr(m.total)};"
     )
     each = "reason for rejection" if m.rejected and not m.chosen else "deduction"
+    requests = [first, f"(b) state, for each {each}, the specific term or condition of the policy relied on;"]
+    if m.asks_committee:
+        requests.append("(c) confirm that your claims review committee approved the rejection;")
+    requests.append(f"({'d' if m.asks_committee else 'c'}) reply to me in writing.")
+    enclosures = ["a copy of your decision letter", *(EVIDENCE_LABELS_EN[k] for k in m.enclosures)]
     blocks += [
         {"type": "para", "text": "I therefore request that you:"},
-        {
-            "type": "list",
-            "items": [
-                first,
-                f"(b) state, for each {each}, the specific term or condition of the policy relied on;",
-                "(c) reply to me in writing.",
-            ],
-        },
-        {"type": "para", "text": "Enclosure: copy of your settlement letter."},
+        {"type": "list", "items": requests},
+        {"type": "para", "text": "Enclosures: " + "; ".join(enclosures) + "."},
         {"type": "para", "text": "Yours faithfully,"},
         {"type": "signature", "text": m.name},
     ]
@@ -245,6 +312,7 @@ def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list
     return letter
 
 
+ROMAN = ("i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii", "xiv", "xv")
 METHOD_TEXT = {"email": "by email", "post": "by post", "portal": "on the insurer's website"}
 
 
@@ -291,7 +359,7 @@ def create_ombudsman_letter(c: AppContext, s: Session, case: Case) -> Letter:
         *({"type": "para", "text": h} for h in history),
         {"type": "heading", "text": "Grounds of complaint"},
     ]
-    grounds, footnotes = _grounds(m, insurer_ref="the insurer's letter")
+    grounds, footnotes = _grounds(m, insurer_ref="the insurer's letter", to_insurer=False)
     blocks += grounds
     relief = (
         "(a) direct the insurer to settle my claim;"
@@ -305,7 +373,12 @@ def create_ombudsman_letter(c: AppContext, s: Session, case: Case) -> Letter:
             "items": [
                 relief,
                 "(b) direct the insurer to state the specific policy terms it relied on;",
-                "(c) grant any other relief that is fair.",
+                *(
+                    ["(c) direct the insurer to confirm that its claims review committee approved the rejection;"]
+                    if m.asks_committee
+                    else []
+                ),
+                f"({'d' if m.asks_committee else 'c'}) grant any other relief that is fair.",
             ],
         },
         {
@@ -322,6 +395,7 @@ def create_ombudsman_letter(c: AppContext, s: Session, case: Case) -> Letter:
                 "(iii) the insurer's reply"
                 if reply is not None
                 else "(iii) a statement that the insurer did not reply",
+                *(f"({roman}) {EVIDENCE_LABELS_EN[k]}" for roman, k in zip(ROMAN[3:], m.enclosures, strict=False)),
             ],
         },
         {"type": "para", "text": "Yours faithfully,"},
@@ -380,7 +454,7 @@ def _check_numbers(
 ) -> None:
     """AI-005 safety net: every number in the letter must come from confirmed facts, chosen deductions,
     the cited chunk or the system-provided extras. No shortcut path exists."""
-    allowed: set[str] = {"1", "2"}  # the grounds' own paragraph numbers
+    allowed: set[str] = {str(i) for i in range(1, 10)}  # the grounds' own paragraph and footnote numbers
     for name, v in f.items():
         if not v:
             continue
@@ -395,8 +469,8 @@ def _check_numbers(
     allowed |= tokens(format_inr(total))
     for i in extra:
         allowed |= tokens(i)
-    for _cit, ch, _src in cited:
-        allowed |= tokens(ch.text)
+    for row in cited:
+        allowed |= tokens(row[1].text)
     if ungrounded(_text_of(blocks), allowed):
         raise AppError("internal_error", 500, "Letter failed the number check.")
 

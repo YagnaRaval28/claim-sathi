@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ReportLink } from "@/components/dialogs";
+import { CategoryPicker, EvidenceChecklist, type ChecklistRow } from "@/components/findings-extras";
 import { AuditBadge, Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote, ProvenanceTag } from "@/components/ui";
 import { api, ApiError, newKey } from "@/lib/api";
 import { formatInr } from "@/lib/format";
@@ -19,7 +20,8 @@ type Analysis = {
   summary: { claimed_paise: number | null; paid_paise: number | null; decision_type: string | null };
   wording: { title: string; version: string; synthetic: boolean } | null;
   line_items: (Target & { description: string; deducted_paise: number })[];
-  reasons: (Target & { text: string })[];
+  reasons: (Target & { text: string; category: string | null })[];
+  checklist: ChecklistRow[];
   counter_points: Point[]; dropped_count: number;
 };
 type Chunk = { text: string; clause_ref: string | null; source: { title: string; version: string; synthetic: boolean } };
@@ -149,7 +151,7 @@ export default function Findings() {
   const noClause = a?.line_items.filter((l) => l.audit_status === "NO_CLAUSE_CITED") ?? [];
   const reasonsNoClause = a?.reasons.filter((r) => r.audit_status === "NO_CLAUSE_CITED") ?? [];
   const canWrite = done && !a!.stale && (a!.line_items.some((l) => CHALLENGEABLE.includes(l.audit_status ?? ""))
-    || a!.reasons.some((r) => CHALLENGEABLE.includes(r.audit_status ?? "")));
+    || a!.reasons.some((r) => CHALLENGEABLE.includes(r.audit_status ?? "") || r.counter_point_ids.length > 0));
   const rejected = a?.summary.decision_type === "repudiation";
 
   return (
@@ -202,6 +204,7 @@ export default function Findings() {
               <p className="quote">“{r.text}”</p>
               <AuditBadge status={r.audit_status ?? "PENDING"} />
               <Points ids={r.counter_point_ids} points={points} onOpen={setOpen} caseId={id} />
+              <CategoryPicker caseId={id} reasonId={r.id} current={r.category} onRerun={() => setTick((n) => n + 1)} />
             </div>
           ))}
           {a.line_items.length > 0 && a.reasons.length > 0 && <h2>{t("details.deductions")}</h2>}
@@ -217,6 +220,9 @@ export default function Findings() {
             </div>
           ))}
           {a.dropped_count > 0 && <p className="muted">{t("findings.dropped")}</p>}
+          <EvidenceChecklist caseId={id} items={a.checklist}
+                             onChange={(row) => setA((x) => (x ? { ...x, checklist: x.checklist.map((i) =>
+                               i.item_key === row.item_key ? row : i) } : x))} />
           <div className="action-bar">
             {canWrite ? (
               <Link className="btn btn-primary btn-block" href={href(`/cases/${id}/letter`)}>{t("findings.writeLetter")} →</Link>

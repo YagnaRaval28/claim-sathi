@@ -105,7 +105,9 @@ def test_rejected_claim_reason_without_clause_gets_a_finding_and_a_letter(client
     a = client.get(f"/api/v1/cases/{cid}/analyses/latest").json()
     assert a["line_items"] == [] and len(a["reasons"]) == 1
     reason = a["reasons"][0]
-    assert reason["audit_status"] == "NO_CLAUSE_CITED" and len(reason["counter_point_ids"]) == 1
+    assert reason["audit_status"] == "NO_CLAUSE_CITED" and len(reason["counter_point_ids"]) == 2
+    rules = {p["rule_key"] for p in a["counter_points"]}
+    assert rules == {"RULE-MC-01", "RULE-MC-02"}  # no clause cited + claims review committee (full rejection)
     r = client.post(f"/api/v1/cases/{cid}/letters", json={}, headers={**h, "Idempotency-Key": str(uuid.uuid4())})
     assert r.status_code == 201, r.text
     text = " ".join(b.get("text", "") + " ".join(b.get("items", [])) for b in r.json()["doc"]["blocks"])

@@ -8,11 +8,13 @@ item is ever labelled "appears valid": that would need an analysis we have not r
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from claimsathi.checklist.service import checklist_view
 from claimsathi.core.clock import now_utc
 from claimsathi.core.errors import AppError
 from claimsathi.core.values import format_inr
@@ -32,6 +34,7 @@ from claimsathi.models import (
     Rule,
 )
 from claimsathi.rules.audit import DEFAULT_IDENTIFIER_PATTERNS, audit_item
+from claimsathi.rules.regulatory import moratorium_applies
 from claimsathi.verify.citations import VERIFIER_VERSION, verify_quote
 
 STEPS = ("checking_wording", "checking_deductions", "checking_sources")
@@ -80,9 +83,16 @@ def _resolve_wording(s: Session, case: Case) -> KnowledgeSource | None:
 
 
 def _evidence_point(
-    s: Session, analysis: Analysis, case: Case, target_type: str, target_id: uuid.UUID, ordinal: int
+    s: Session,
+    analysis: Analysis,
+    case: Case,
+    target_type: str,
+    target_id: uuid.UUID,
+    ordinal: int,
+    rule_key: str = "RULE-MC-01",
 ) -> None:
-    rule = _rule(s, "RULE-MC-01")
+    """One deterministic counter-point whose quote is verified against the cited chunk, or dropped (AI-004)."""
+    rule = _rule(s, rule_key)
     if rule is None:
         return
     ev = rule.params["evidence"]
@@ -142,6 +152,10 @@ def _evidence_point(
             verifier_version=VERIFIER_VERSION,
         )
     )
+
+
+def _iso(v: str | None) -> date | None:
+    return date.fromisoformat(v) if v else None
 
 
 def _analysis_failed(s: Session, payload: dict[str, Any]) -> None:
@@ -211,13 +225,35 @@ def make_analysis_handler() -> Handler:
             if li.audit_status == "NO_CLAUSE_CITED":
                 ordinal += 1
                 _evidence_point(s, a, case, "line_item", li.id, ordinal)
-        for r in s.scalars(select(DecisionReason).where(DecisionReason.case_id == case.id)):
+        reasons = list(
+            s.scalars(select(DecisionReason).where(DecisionReason.case_id == case.id).order_by(DecisionReason.ordinal))
+        )
+        for r in reasons:
             r.audit_status = audit_item(
                 clause_cited=r.clause_cited_verbatim, wording_clause_keys=keys, patterns=patterns
             ).status
             if r.audit_status == "NO_CLAUSE_CITED":
                 ordinal += 1
                 _evidence_point(s, a, case, "reason", r.id, ordinal)
+        # Deterministic regulatory checks on confirmed facts and confirmed categories (PRD FR-016)
+        facts = {
+            f.name: f.value
+            for f in s.scalars(select(ExtractedField).where(ExtractedField.case_id == case.id))
+            if f.value_enc is None
+        }
+        if facts.get("decision_type") == "repudiation" and reasons and _rule(s, "RULE-MC-02"):
+            ordinal += 1
+            _evidence_point(s, a, case, "reason", reasons[0].id, ordinal, "RULE-MC-02")
+        mc03, mc05 = _rule(s, "RULE-MC-03"), _rule(s, "RULE-MC-05")
+        inception, admission = _iso(facts.get("first_inception_date")), _iso(facts.get("admission_date"))
+        for r in reasons:
+            min_months = int(mc03.params.get("min_months", 60)) if mc03 else 0
+            if mc03 and moratorium_applies(r.category, inception, admission, min_months):
+                ordinal += 1
+                _evidence_point(s, a, case, "reason", r.id, ordinal, "RULE-MC-03")
+            if mc05 and r.category in mc05.params.get("categories", []):
+                ordinal += 1
+                _evidence_point(s, a, case, "reason", r.id, ordinal, "RULE-MC-05")
         step(
             s,
             case_id=case.id,
@@ -328,15 +364,19 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
                 "text": r.text_verbatim,
                 "audit_status": r.audit_status,
                 "clause_cited_verbatim": r.clause_cited_verbatim,
+                "category": r.category,
+                "category_source": r.category_source,
                 "counter_point_ids": points_by_target.get(r.id, []),
             }
             for r in reasons
         ],
+        "checklist": checklist_view(s, case),
         "counter_points": [
             {
                 "id": str(p.id),
                 "statement": p.statement_en,
                 "statement_language": "en",
+                "rule_key": p.rule_key,
                 "provenance": "rule",
                 "basis_type": p.basis_type,
                 "target_id": str(p.target_id),

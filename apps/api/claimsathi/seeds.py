@@ -16,6 +16,7 @@ import argparse
 import hashlib
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -55,6 +56,106 @@ DEADLINE_PARAMS = {
     "award_months": 3,
     "month_rule": "same day number next month; last day of that month if the day does not exist (OQ-10)",
 }
+
+
+STATEMENT_MC02 = (
+    "Your claim was fully rejected. The rule below says a full rejection needs the approval of the insurer's "
+    "claims review committee, so you can ask the insurer to confirm that approval."
+)
+STATEMENT_MC03 = (
+    "Your policy had more than 60 months of continuous cover before this admission. The rule below says that "
+    "after 60 months a claim can't be contested for non-disclosure, except for established fraud."
+)
+STATEMENT_MC05 = (
+    "If the missing papers are hospital documents, the rule below says the insurer should collect them directly "
+    "from the hospital, so ask the insurer to do that instead of rejecting your claim."
+)
+# FR-018 evidence map: DRAFT, authored for the MVP and pending domain review (decision D-H). Never model-made.
+EVIDENCE_MAP = {
+    "base": ["decision_letter", "policy_schedule", "policy_wording", "discharge_summary", "final_bill"],
+    "by_category": {
+        "ped_waiting": ["doctor_certificate_first_diagnosis", "previous_policy_schedules"],
+        "non_disclosure": ["doctor_certificate_first_diagnosis", "previous_policy_schedules"],
+        "specific_waiting": ["previous_policy_schedules", "doctor_certificate_first_diagnosis"],
+        "initial_waiting": ["previous_policy_schedules"],
+        "room_rent_proportionate": ["hospital_tariff_sheet", "room_category_record"],
+        "reasonable_customary": ["hospital_tariff_sheet"],
+        "non_payable_items": ["itemised_hospital_bill"],
+        "not_medically_necessary": ["treating_doctor_note_necessity"],
+        "documents_or_intimation": ["proof_documents_submitted", "intimation_proof"],
+        "policy_not_in_force": ["premium_payment_receipts"],
+    },
+}
+
+
+def _regulatory_rules(env: str) -> dict[str, dict[str, Any]]:
+    """RULE-MC-02/03/05 (PRD FR-016 deterministic checks). Local/test cite the SYNTHETIC regulation; prod stays
+    disabled until the official Master Circular is ingested and each quote is verified."""
+    if env in ("local", "test"):
+        src = "SAMPLE-REG-001"
+        quotes = {
+            "RULE-MC-02": (
+                "17(a)",
+                "No claim shall be fully rejected by an insurer under this synthetic regulation "
+                "without the approval of its claims review panel",
+            ),
+            "RULE-MC-03": (
+                "13",
+                "no claim shall be contested by the insurer on the ground of non-disclosure or "
+                "misrepresentation, except on the ground of established fraud",
+            ),
+            "RULE-MC-05": (
+                "17(c)",
+                "The insurer shall collect the hospital documents it needs directly from the hospital",
+            ),
+        }
+    else:
+        src = "IRDAI/HLT/CIR/PRO/84/5/2024"
+        quotes = {"RULE-MC-02": ("17(a)", ""), "RULE-MC-03": ("13", ""), "RULE-MC-05": ("17(c)", "")}
+    statements = {"RULE-MC-02": STATEMENT_MC02, "RULE-MC-03": STATEMENT_MC03, "RULE-MC-05": STATEMENT_MC05}
+    extra: dict[str, dict[str, Any]] = {
+        "RULE-MC-03": {"min_months": 60, "categories": ["non_disclosure", "ped_waiting"]},
+        "RULE-MC-05": {"categories": ["documents_or_intimation"]},
+    }
+    return {
+        key: {
+            "evidence": {"source_identifier": src, "clause_key": clause, "quote": quote},
+            "statement_en": statements[key],
+            **extra.get(key, {}),
+        }
+        for key, (clause, quote) in quotes.items()
+    }
+
+
+def _seed_regulatory_rules(s: Session, env: str) -> None:
+    local = env in ("local", "test")
+    for key, params in _regulatory_rules(env).items():
+        ev = params["evidence"]
+        source_ref = f"{ev['source_identifier']} Para {ev['clause_key']}" if local else None
+        if s.scalar(select(Rule).where(Rule.rule_key == key)) is None:
+            s.add(
+                Rule(
+                    rule_key=key,
+                    version=1,
+                    kind="regulatory",
+                    status="enabled" if local else "disabled_pending_verification",
+                    source_ref=source_ref,
+                    verified_by="seed:local (SYNTHETIC fixture)" if local else None,
+                    params=params,
+                )
+            )
+    if s.scalar(select(Rule).where(Rule.rule_key == "RULE-EVIDENCE")) is None:
+        s.add(
+            Rule(
+                rule_key="RULE-EVIDENCE",
+                version=1,
+                kind="evidence_map",
+                status="enabled",
+                source_ref="ClaimSathi evidence map v1 (DRAFT, pending domain review D-H)",
+                verified_by="seed (pending domain review)",
+                params=EVIDENCE_MAP,
+            )
+        )
 
 
 def _seed_escalation_rules(s: Session, env: str) -> None:
@@ -111,8 +212,8 @@ def seed(s: Session, env: str) -> None:
             issuer="SYNTHETIC test regulator",
             identifier="SAMPLE-REG-001",
             title="Sample Regulation 001 (SYNTHETIC, not a real regulation)",
-            version="1",
-            effective_from=date(2024, 1, 1),
+            version="2",
+            effective_from=date(2025, 1, 1),
             synthetic=True,
             attested_by="seed:synthetic-fixture",
             text=(FIXTURES / "SAMPLE-REG-001.txt").read_text(encoding="utf-8"),
@@ -158,6 +259,7 @@ def seed(s: Session, env: str) -> None:
             )
         )
     _seed_escalation_rules(s, env)
+    _seed_regulatory_rules(s, env)
     s.commit()
 
 

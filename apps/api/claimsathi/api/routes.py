@@ -366,6 +366,60 @@ def post_analysis(
     return JSONResponse(out, status_code=202)
 
 
+class CategoryIn(_In):
+    category: Literal[
+        "ped_waiting",
+        "non_disclosure",
+        "specific_waiting",
+        "initial_waiting",
+        "exclusion",
+        "not_medically_necessary",
+        "documents_or_intimation",
+        "policy_not_in_force",
+        "non_payable_items",
+        "room_rent_proportionate",
+        "reasonable_customary",
+        "sub_limit",
+        "copay_deductible",
+        "other_unknown",
+    ]
+
+
+@router.patch("/cases/{case_id}/reasons/{reason_id}", status_code=202)
+def patch_reason_category(
+    reason_id: uuid.UUID,
+    body: CategoryIn,
+    bg: BackgroundTasks,
+    case: Case = Depends(owned_case),
+    s: Session = Depends(db),
+    c: AppContext = Depends(ctx),
+) -> dict[str, Any]:
+    """FR-013: the user's choice of category overrides any model; the findings are checked again."""
+    from claimsathi.models import DecisionReason
+
+    reason = s.scalar(select(DecisionReason).where(DecisionReason.id == reason_id, DecisionReason.case_id == case.id))
+    if reason is None:
+        raise not_found()
+    reason.category, reason.category_source = body.category, "user"
+    a = start_analysis(s, case)
+    _after_commit(bg, c)
+    return {"analysis_id": str(a.id)}
+
+
+class ChecklistIn(_In):
+    status: Literal["pending", "obtained", "uploaded"]
+    document_id: uuid.UUID | None = None
+
+
+@router.patch("/cases/{case_id}/checklist/{item_key}")
+def patch_checklist(
+    item_key: str, body: ChecklistIn, case: Case = Depends(owned_case), s: Session = Depends(db)
+) -> dict[str, Any]:
+    from claimsathi.checklist.service import set_item
+
+    return set_item(s, case, item_key[:64], body.status, body.document_id)
+
+
 @router.get("/cases/{case_id}/analyses/latest")
 def latest_analysis(case: Case = Depends(owned_case), s: Session = Depends(db)) -> dict[str, Any]:
     view = analysis_view(s, case)

@@ -38,7 +38,7 @@ test("rejected claim: the reason without a clause gets a finding and a letter", 
   await page.getByRole("button", { name: "Check my case" }).click();
   await expect(page.getByText("Your insurer rejected your claim of ₹1,85,000.")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("non-disclosure of pre-existing Diabetes Mellitus").first()).toBeVisible();
-  await expect(page.locator(".cite-tab")).toHaveCount(1);
+  await expect(page.locator(".cite-tab:visible")).toHaveCount(2);  // Para 17(b) and Para 17(a)
   await page.getByRole("link", { name: /Write my letter/ }).click();
   await expect(page.locator("article.paper")).toContainText("was rejected");
   await expect(page.locator("article.paper")).toContainText("non-disclosure of pre-existing Diabetes Mellitus");

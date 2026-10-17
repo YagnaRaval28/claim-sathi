@@ -269,20 +269,20 @@ def facts_view(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
     for name in FIELD_ORDER:
         r = rows.get(name)
         if r is None:
-            if name in required or name == "paid_paise":
-                fields.append(
-                    {
-                        "name": name,
-                        "value": None,
-                        "display": None,
-                        "status": "not_found",
-                        "confidence_flag": "please_check" if name in required else "ok",
-                        "source_ref": None,
-                        "provenance": "document",
-                        "required": name in required,
-                        "confirmed": False,
-                    }
-                )
+            # every field is listed, so the user can add what the letter didn't say (FR-011)
+            fields.append(
+                {
+                    "name": name,
+                    "value": None,
+                    "display": None,
+                    "status": "not_found",
+                    "confidence_flag": "please_check" if name in required else "ok",
+                    "source_ref": None,
+                    "provenance": "document",
+                    "required": name in required,
+                    "confirmed": False,
+                }
+            )
             continue
         val = c.cipher.decrypt(r.value_enc) if r.value_enc else r.value
         fields.append(

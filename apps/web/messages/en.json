@@ -571,5 +571,196 @@
     "emailPostBody": "Send the signed letter and enclosures to the Insurance Ombudsman office for your area. Find the office and its address on the same website.",
     "logFiledTitle": "After you file",
     "filedDone": "Logged. We'll show when a decision is usually expected."
+  },
+  "categories": {
+    "question": "What reason did the insurer give?",
+    "help": "Pick the closest match. We use it to check the rules that apply.",
+    "change": "Change reason type",
+    "save": "Check again",
+    "yours": "You chose: {category}",
+    "items": {
+      "ped_waiting": "A pre-existing illness waiting period",
+      "non_disclosure": "You didn't disclose something when buying the policy",
+      "specific_waiting": "A waiting period for a specific illness",
+      "initial_waiting": "The first 30-day (or similar) waiting period",
+      "exclusion": "The treatment is excluded by the policy",
+      "not_medically_necessary": "The treatment wasn't medically necessary, or could be done as OPD",
+      "documents_or_intimation": "Missing documents, or the claim was informed late",
+      "policy_not_in_force": "The policy wasn't active",
+      "non_payable_items": "Items the policy doesn't pay for",
+      "room_rent_proportionate": "Room rent limit or a proportionate deduction",
+      "reasonable_customary": "Charges above 'reasonable and customary'",
+      "sub_limit": "A sub-limit on this treatment",
+      "copay_deductible": "Co-payment or deductible",
+      "other_unknown": "Something else, or I'm not sure"
+    }
+  },
+  "checklist": {
+    "title": "Documents that would help",
+    "intro": "Tick each one you have. Ticked documents are listed as enclosures in your letters.",
+    "uploaded": "On file",
+    "have": "I have this",
+    "items": {
+      "decision_letter": "The insurer's decision letter",
+      "policy_schedule": "Your policy schedule",
+      "policy_wording": "The policy wording",
+      "discharge_summary": "The hospital discharge summary",
+      "final_bill": "The final hospital bill",
+      "doctor_certificate_first_diagnosis": "A certificate from your treating doctor with the date the illness was first diagnosed",
+      "previous_policy_schedules": "Earlier policy schedules that show continuous cover",
+      "hospital_tariff_sheet": "The hospital's tariff sheet",
+      "room_category_record": "A record of the room category you stayed in",
+      "itemised_hospital_bill": "The itemised hospital bill",
+      "treating_doctor_note_necessity": "A note from your doctor on why the treatment was needed",
+      "proof_documents_submitted": "Proof of the documents you submitted",
+      "intimation_proof": "Proof of when you informed the insurer",
+      "premium_payment_receipts": "Premium payment receipts"
+    }
+  },
+  "footer": {
+    "how": "How it works",
+    "dont": "What we don't do",
+    "free": "Free official help",
+    "accuracy": "Accuracy",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "contact": "Contact"
+  },
+  "pages": {
+    "updated": "Last updated: {date}",
+    "draft": "DRAFT, pending legal review. Not final.",
+    "opensOfficial": "opens official site",
+    "how": {
+      "title": "How ClaimSathi works",
+      "sections": [
+        [
+          "1. Upload your insurer's letter",
+          "Upload the rejection or settlement letter as a PDF. We read the text on it."
+        ],
+        [
+          "2. Check what we read",
+          "We show the details and deductions we found. You fix anything wrong and confirm. We only use details you confirm."
+        ],
+        [
+          "3. See the findings",
+          "We check each deduction and reason against fixed rules. Every rule we quote is checked word for word against its source, and you can open the source."
+        ],
+        [
+          "4. Get your letter",
+          "We write a letter to the insurer's grievance officer from your confirmed details. You read it, edit it if you like, and send it yourself."
+        ],
+        [
+          "5. Track deadlines",
+          "Log when you send it. We work out when you can go to the Insurance Ombudsman and the last day to do it, and remind you."
+        ]
+      ]
+    },
+    "dont": {
+      "title": "What we don't do",
+      "sections": [
+        [
+          "We are not lawyers",
+          "ClaimSathi is a self-help drafting tool, not legal advice."
+        ],
+        [
+          "We don't send anything for you",
+          "You send every letter and complaint yourself."
+        ],
+        [
+          "We don't charge you",
+          "ClaimSathi is free. We take no success fee."
+        ],
+        [
+          "We don't promise results",
+          "We can't say whether your insurer will pay. We show which rules apply and where they come from."
+        ],
+        [
+          "We don't handle other insurance",
+          "Only health insurance claims in India for now."
+        ]
+      ]
+    },
+    "free": {
+      "title": "Free official channels",
+      "intro": "All three are free. You don't need anyone's help to use them.",
+      "warning": "Never pay anyone claiming to be the Ombudsman, or offering to file for a fee.",
+      "insurer": [
+        "1. Your insurer's grievance officer",
+        "Write here first. Every insurer has a grievance redressal officer. ClaimSathi writes this letter for you."
+      ],
+      "bima": [
+        "2. Bima Bharosa (IRDAI)",
+        "IRDAI's complaint portal. Optional, and it can run alongside your other steps. Toll-free: 155255 or 1800 4254 732."
+      ],
+      "ombudsman": [
+        "3. Insurance Ombudsman",
+        "If the insurer rejects your grievance, or doesn't reply within a month, you can complain to the Ombudsman within a year."
+      ],
+      "source": "Source: policyholder.gov.in (IRDAI), checked 17/10/2026."
+    },
+    "accuracy": {
+      "title": "Accuracy",
+      "empty": "We haven't published an audit yet. We will publish one before we open to everyone.",
+      "method": "How we check: every quote we show is matched word for word against its source text before you see it. Quotes that don't match are removed, never shown."
+    },
+    "privacy": {
+      "title": "Privacy notice",
+      "sections": [
+        [
+          "What we collect",
+          "Your email address, the documents you upload, the details we read from them, and what you type in."
+        ],
+        [
+          "Why",
+          "To explain your claim decision, write your letters and remind you of deadlines. Nothing else."
+        ],
+        [
+          "Where it is kept",
+          "In India. Names, emails and policy numbers are encrypted."
+        ],
+        [
+          "How long",
+          "Uploaded files are deleted 90 days after you close a case (you can extend once). You can download or delete everything at any time in Settings."
+        ],
+        [
+          "Your rights",
+          "You can see, download, correct and delete your data, and withdraw consent, from Settings."
+        ]
+      ]
+    },
+    "terms": {
+      "title": "Terms of use",
+      "sections": [
+        [
+          "The service",
+          "ClaimSathi helps you understand a health insurance claim decision and draft letters. It is free."
+        ],
+        [
+          "Your responsibility",
+          "You check every letter before sending it and you send it yourself. Only use documents you are allowed to share."
+        ],
+        [
+          "No legal advice",
+          "Nothing here is legal advice. For legal advice, talk to a lawyer."
+        ],
+        [
+          "Fair use",
+          "Don't misuse the service or try to access other people's cases."
+        ]
+      ]
+    },
+    "contact": {
+      "title": "Contact",
+      "sections": [
+        [
+          "Grievance officer",
+          "To be named before launch."
+        ],
+        [
+          "Report a problem",
+          "Use \"Something's wrong?\" on any finding or letter paragraph."
+        ]
+      ]
+    }
   }
 }

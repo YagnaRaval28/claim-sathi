@@ -247,6 +247,25 @@ class ExtractedField(Base):
     )
 
 
+CATEGORIES = (  # PRD FR-013 taxonomy
+    "ped_waiting",
+    "non_disclosure",
+    "specific_waiting",
+    "initial_waiting",
+    "exclusion",
+    "not_medically_necessary",
+    "documents_or_intimation",
+    "policy_not_in_force",
+    "non_payable_items",
+    "room_rent_proportionate",
+    "reasonable_customary",
+    "sub_limit",
+    "copay_deductible",
+    "other_unknown",
+)
+_CATEGORY_CHECK = "category IS NULL OR category IN (" + ",".join(f"'{c}'" for c in CATEGORIES) + ")"
+
+
 class DecisionReason(Base):
     __tablename__ = "decision_reasons"
     id: Mapped[uuid.UUID] = _pk()
@@ -256,7 +275,9 @@ class DecisionReason(Base):
     clause_cited_verbatim: Mapped[str | None] = mapped_column(Text)
     source_ref: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     category: Mapped[str | None] = mapped_column(String(32))
+    category_source: Mapped[str | None] = mapped_column(String(8))  # user | model
     audit_status: Mapped[str | None] = mapped_column(String(32))
+    __table_args__ = (CheckConstraint(_CATEGORY_CHECK, name="category"),)
 
 
 class LineItem(Base):
@@ -270,11 +291,13 @@ class LineItem(Base):
     reason_verbatim: Mapped[str | None] = mapped_column(Text)
     clause_cited_verbatim: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(String(32))
+    category_source: Mapped[str | None] = mapped_column(String(8))  # user | model
     audit_status: Mapped[str | None] = mapped_column(String(32))
     user_entered: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     unitemised: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     source_ref: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     __table_args__ = (
+        CheckConstraint(_CATEGORY_CHECK, name="category"),
         CheckConstraint("deducted_paise >= 0", name="deducted_nonneg"),
         CheckConstraint("billed_paise IS NULL OR billed_paise >= 0", name="billed_nonneg"),
         CheckConstraint("billed_paise IS NULL OR deducted_paise <= billed_paise", name="deducted_le_billed"),
@@ -633,3 +656,15 @@ class DataExport(Base):
         CheckConstraint("status IN ('queued','ready','failed','expired')", name="status"),
         CheckConstraint("scope = 'account' OR case_id IS NOT NULL", name="case_scope_has_case"),
     )
+
+
+class ChecklistItem(Base):
+    """Evidence checklist (PRD FR-018): each item traces to a row of the RULE-EVIDENCE map."""
+
+    __tablename__ = "checklist_items"
+    case_id: Mapped[uuid.UUID] = mapped_column(UUIDPK, ForeignKey("cases.id", ondelete="CASCADE"), primary_key=True)
+    item_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pending")
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("documents.id", ondelete="SET NULL"))
+    updated_at: Mapped[datetime] = _created()
+    __table_args__ = (CheckConstraint("status IN ('pending','obtained','uploaded')", name="status"),)
