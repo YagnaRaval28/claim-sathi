@@ -44,7 +44,7 @@ export function AuditBadge({ status }: { status: string }) {
   );
 }
 
-const STEPS = ["documents", "details", "findings", "letter"] as const;
+const STEPS = ["documents", "details", "findings", "letter", "track"] as const;
 
 export function CaseSteps({ caseId, current }: { caseId: string; current: (typeof STEPS)[number] }) {
   const { t, href } = useI18n();

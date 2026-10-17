@@ -124,6 +124,20 @@ h3 { font-size: 18px; font-weight: 600; margin: 0 0 var(--space-2); }
 .pill-warning { color: var(--color-warning); background: var(--color-warning-bg); }
 .pill-neutral { color: var(--color-text-secondary); background: var(--color-surface-sunken); }
 .pill-dashed { color: var(--color-text-secondary); border: 1px dashed var(--color-border-input); }
+.pill-error { color: var(--color-error); background: var(--color-error-bg); }
+.pill-info { color: var(--color-info); background: var(--color-info-bg); }
+.pill-success { color: var(--color-success); background: var(--color-success-bg); }
+
+/* Track (CASE-07): timeline and stage cards, tokens only */
+.timeline { list-style: none; padding: 0; margin: 0; border-left: 2px solid var(--color-border); }
+.timeline li { position: relative; padding: 0 0 var(--space-4) var(--space-4); }
+.timeline li::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px;
+  border-radius: var(--radius-full); background: var(--color-primary); }
+.stage-grid { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.stage-card { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3);
+  background: var(--color-surface); }
+.stage-card[data-state="current"] { border-color: var(--color-primary); background: var(--color-primary-subtle); }
+.check-row { display: flex; gap: var(--space-3); align-items: flex-start; }
 
 .header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
   padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); background: var(--color-surface);

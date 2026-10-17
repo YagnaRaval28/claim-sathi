@@ -70,6 +70,23 @@ def create_case(c: AppContext, s: Session, user: User, body: CaseCreate) -> Case
     return case
 
 
+def _next_deadline(s: Session, case: Case) -> dict[str, Any] | None:
+    from claimsathi.core.clock import today_ist
+    from claimsathi.models import Deadline
+
+    d = s.scalar(
+        select(Deadline)
+        .where(Deadline.case_id == case.id, Deadline.status == "active", Deadline.due_date >= today_ist())
+        .order_by(Deadline.due_date)
+        .limit(1)
+    )
+    return (
+        {"kind": d.kind, "due_date": d.due_date.isoformat(), "days_left": (d.due_date - today_ist()).days}
+        if d
+        else None
+    )
+
+
 def case_summary(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
     from claimsathi.extraction.service import extraction_state  # local import avoids an import cycle
 
@@ -88,6 +105,7 @@ def case_summary(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
             "stale": case.stale_since is not None,
         },
         "extraction": extraction_state(s, case),
+        "next_deadline": _next_deadline(s, case),
         "documents": [
             {
                 "id": str(d.id),

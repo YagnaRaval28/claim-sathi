@@ -38,6 +38,7 @@ Evidence (16 Oct 2026):
 | T-307 | Done; PDF export unverified locally | OI-03 |
 | T-308 | Done, except the manual `gemini_dev` run | `apps/web/e2e/` covers partly paid (SYN-001), rejection (SYN-002), manual entry, sign-out and Gujarati |
 | Post-VS-1 fixes | Done | Listed in the 16 Oct audit fixes below |
+| M7: FR-020 to FR-023 (17 Oct 2026) | Done, except SES (M9) and the Ombudsman pack (FR-026) | Migration 0002 adds `case_events`, `deadlines`, `reminders` and `rule_acknowledgements`. RULE-ESC-01..06 and RULE-DEADLINES are seeded: enabled locally pending legal review (OQ-10), `disabled_pending_verification` in prod. The deterministic engine is `rules/escalation.py`. API: `/escalation`, `/events`, `/deadlines.ics`, `/notifications`. Screens: Track (CASE-07) and Ombudsman checks (CASE-09). A local reminder ticker stands in for Cloud Scheduler. Tests: 20 unit, 10 integration, 1 browser. |
 
 **16 Oct 2026 audit fixes** (found by browser testing and a frontend–backend contract review):
 

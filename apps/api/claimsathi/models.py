@@ -140,6 +140,11 @@ class Case(Base):
         UUIDPK, ForeignKey("knowledge_sources.id", use_alter=True, name="fk_cases_wording_source")
     )
     lock_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    s2_filed_at: Mapped[date | None] = mapped_column(Date)
+    outcome: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retention_delete_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retention_extended: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     last_activity_at: Mapped[datetime] = _created()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
@@ -150,6 +155,11 @@ class Case(Base):
         CheckConstraint("policy_type IN ('individual','floater','group','unknown')", name="policy_type"),
         CheckConstraint("wording_mode IN ('library','uploaded','none')", name="wording_mode"),
         Index("ix_cases_user_status", "user_id", "status"),
+        Index(
+            "ix_cases_retention_delete_after",
+            "retention_delete_after",
+            postgresql_where=text("retention_delete_after IS NOT NULL"),
+        ),
     )
 
 
@@ -523,3 +533,75 @@ class AuditLog(Base):
     entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
     entity_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = _created()
+
+
+# --- Escalation: events, deadlines, reminders (PRD FR-020 to FR-023) ----------------------------------
+
+EVENT_KINDS = ("s1_sent", "insurer_reply", "s2_filed", "s3_filed", "ombudsman_outcome", "payment_received", "closed")
+DEADLINE_KINDS = (
+    "ombudsman_eligible_from",
+    "ombudsman_limitation",
+    "insurer_response_expected",
+    "ombudsman_award_expected",
+)
+
+
+class CaseEvent(Base):
+    __tablename__ = "case_events"
+    id: Mapped[uuid.UUID] = _pk()
+    case_id: Mapped[uuid.UUID] = _case_fk()
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    event_date: Mapped[date] = mapped_column(Date, nullable=False)
+    meta: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False, server_default=text("'{}'"))
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("documents.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = _created()
+    __table_args__ = (
+        CheckConstraint("kind IN (" + ",".join(f"'{k}'" for k in EVENT_KINDS) + ")", name="kind"),
+        Index("ix_case_events_case_date", "case_id", "event_date"),
+    )
+
+
+class Deadline(Base):
+    __tablename__ = "deadlines"
+    id: Mapped[uuid.UUID] = _pk()
+    case_id: Mapped[uuid.UUID] = _case_fk()
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    rule_key: Mapped[str] = mapped_column(String(48), nullable=False)
+    rule_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    computed_from: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="active")
+    __table_args__ = (
+        CheckConstraint("kind IN (" + ",".join(f"'{k}'" for k in DEADLINE_KINDS) + ")", name="kind"),
+        CheckConstraint("status IN ('active','passed','cancelled')", name="status"),
+        UniqueConstraint("case_id", "kind", name="uq_deadlines_case_kind"),
+        Index("ix_deadlines_due_active", "due_date", postgresql_where=text("status = 'active'")),
+    )
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+    id: Mapped[uuid.UUID] = _pk()
+    case_id: Mapped[uuid.UUID] = _case_fk()
+    deadline_id: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("deadlines.id", ondelete="SET NULL"))
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    channel: Mapped[str] = mapped_column(String(8), nullable=False)
+    send_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="scheduled")
+    attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("channel IN ('email','in_app')", name="channel"),
+        CheckConstraint("status IN ('scheduled','sent','failed','cancelled')", name="status"),
+        UniqueConstraint("case_id", "kind", "channel", "send_at", name="uq_reminders_case_kind_channel_send"),
+        Index("ix_reminders_send_scheduled", "send_at", postgresql_where=text("status = 'scheduled'")),
+    )
+
+
+class RuleAcknowledgement(Base):
+    __tablename__ = "rule_acknowledgements"
+    case_id: Mapped[uuid.UUID] = mapped_column(UUIDPK, ForeignKey("cases.id", ondelete="CASCADE"), primary_key=True)
+    rule_key: Mapped[str] = mapped_column(String(48), primary_key=True)
+    rule_version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    acknowledged_at: Mapped[datetime] = _created()

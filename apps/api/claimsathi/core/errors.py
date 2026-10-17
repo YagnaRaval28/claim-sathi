@@ -38,6 +38,8 @@ TITLES: dict[str, str] = {
     "out_of_scope": "Outside ClaimSathi's scope",
     "ai_paused_budget": "AI features paused",
     "export_unavailable": "PDF export unavailable",
+    "case_closed": "Case closed",
+    "escalation_blocked": "Ombudsman conditions not met",
     "internal_error": "Something went wrong",
 }
 

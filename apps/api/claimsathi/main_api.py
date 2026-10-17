@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request, Response
 from claimsathi.ai.gateway import Provider
 from claimsathi.ai.providers import FakeProvider, GeminiDevProvider
 from claimsathi.analysis.service import make_analysis_handler
+from claimsathi.api.escalation_routes import router as escalation_router
 from claimsathi.api.routes import router
 from claimsathi.context import AppContext
 from claimsathi.core.config import Settings, get_settings
@@ -20,6 +21,7 @@ from claimsathi.core.db import make_session_factory
 from claimsathi.core.errors import install_error_handlers
 from claimsathi.core.logging import configure_logging, get_logger
 from claimsathi.documents.service import make_read_handler
+from claimsathi.escalation.service import send_due_reminders
 from claimsathi.extraction.service import make_extract_handler
 from claimsathi.infra import MemoryMailer, MemoryObjectStore, S3ObjectStore, SmtpMailer
 from claimsathi.jobs import Dispatcher
@@ -71,6 +73,16 @@ def build_context(settings: Settings) -> AppContext:
     )
 
 
+def reminder_ticker(c: AppContext, stop: threading.Event, interval_s: float = 60.0) -> None:
+    """Local stand-in for the Cloud Scheduler tick (system-design §3.6): sends due reminders once a minute."""
+    log = get_logger("scheduler")
+    while not stop.wait(interval_s):
+        try:
+            send_due_reminders(c)
+        except Exception as exc:  # keep ticking; the class name only
+            log.error("reminder_tick_failed", error_code=type(exc).__name__)
+
+
 def create_app(context: AppContext | None = None) -> FastAPI:
     settings = context.settings if context else get_settings()
     configure_logging(
@@ -80,6 +92,8 @@ def create_app(context: AppContext | None = None) -> FastAPI:
     make_read_handler(c)
     make_extract_handler(c)
     make_analysis_handler()
+
+    stop = threading.Event()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -91,7 +105,9 @@ def create_app(context: AppContext | None = None) -> FastAPI:
                 c.dispatcher.run_pending()
 
             threading.Thread(target=resume, name="resume-tasks", daemon=True).start()
+            threading.Thread(target=reminder_ticker, args=(c, stop), name="reminders", daemon=True).start()
         yield
+        stop.set()
 
     app = FastAPI(
         lifespan=lifespan,
@@ -123,4 +139,5 @@ def create_app(context: AppContext | None = None) -> FastAPI:
         return response
 
     app.include_router(router)
+    app.include_router(escalation_router)
     return app

@@ -5,6 +5,9 @@
   local/test use the SYNTHETIC fixture SAMPLE-REG-001. prod points at the real IRDAI Master Circular and
   stays `disabled_pending_verification` until an admin ingests the official PDF and verifies the quote.
 - knowledge: local/test ingest only SYNTHETIC fixtures from eval/fixtures/knowledge.
+- escalation (FR-020/021): RULE-ESC-01..06 cite the Insurance Ombudsman Rules, 2017. They are enabled in
+  local/test, marked pending legal review (OQ-10), and stay `disabled_pending_verification` in prod until a
+  reviewer verifies them. RULE-DEADLINES holds the deadline parameters and the month/year interpretation.
 """
 
 from __future__ import annotations
@@ -29,6 +32,57 @@ STATEMENT_17B = (
     "Your insurer did not cite a specific policy clause for this deduction. The rule below requires "
     "insurers to give the specific policy term relied on, so you can ask for it."
 )
+
+
+ESC_RULES = {
+    "RULE-ESC-01": ("Insurance Ombudsman Rules, 2017, Rule 14(3)(a)", {"check": "representation_logged"}),
+    "RULE-ESC-02": ("Insurance Ombudsman Rules, 2017, Rule 14(3)(a)", {"check": "reply_or_one_month", "months": 1}),
+    "RULE-ESC-03": (
+        "Insurance Ombudsman Rules, 2017, Rule 14(3)(b) and 14(4)",
+        {"check": "within_one_year", "years": 1},
+    ),
+    "RULE-ESC-04": ("Insurance Ombudsman Rules, 2017, Rule 14(5)", {"check": "not_in_court"}),
+    "RULE-ESC-05": (
+        "Insurance Ombudsman Rules, 2017, Rule 17(3)",
+        {"check": "amount_cap", "cap_paise": 50_00_000 * 100},
+    ),
+    "RULE-ESC-06": ("Insurance Ombudsman Rules, 2017, Rule 14(1) and 14(2)", {"check": "complainant_signs"}),
+}
+DEADLINE_PARAMS = {
+    "insurer_response_days": 14,  # VERIFY-PRIMARY (OQ-05)
+    "eligibility_months": 1,
+    "limitation_years": 1,
+    "award_months": 3,
+    "month_rule": "same day number next month; last day of that month if the day does not exist (OQ-10)",
+}
+
+
+def _seed_escalation_rules(s: Session, env: str) -> None:
+    local = env in ("local", "test")
+    for key, (source, params) in ESC_RULES.items():
+        if s.scalar(select(Rule).where(Rule.rule_key == key)) is None:
+            s.add(
+                Rule(
+                    rule_key=key,
+                    version=1,
+                    kind="procedural",
+                    status="enabled" if local else "disabled_pending_verification",
+                    source_ref=source,
+                    verified_by="seed:local (pending legal review OQ-10)" if local else None,
+                    params=params,
+                )
+            )
+    if s.scalar(select(Rule).where(Rule.rule_key == "RULE-DEADLINES")) is None:
+        s.add(
+            Rule(
+                rule_key="RULE-DEADLINES",
+                version=1,
+                kind="limit",
+                status="enabled",
+                source_ref="Insurance Ombudsman Rules, 2017, Rules 14(3) and 17(4); response days VERIFY-PRIMARY",
+                params=DEADLINE_PARAMS,
+            )
+        )
 
 
 def seed(s: Session, env: str) -> None:
@@ -103,6 +157,7 @@ def seed(s: Session, env: str) -> None:
                 params={"evidence": evidence, "statement_en": STATEMENT_17B},
             )
         )
+    _seed_escalation_rules(s, env)
     s.commit()
 
 

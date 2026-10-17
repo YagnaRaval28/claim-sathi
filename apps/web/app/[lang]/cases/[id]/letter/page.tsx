@@ -90,6 +90,7 @@ export default function LetterPage() {
               </button>
               {!read && <p className="muted">{t("letter.readFirst")}</p>}
               <p className="muted">{t("letter.sendNote")}</p>
+              <Link className="btn btn-secondary btn-block" href={href(`/cases/${id}/track`)}>{t("letter.afterSending")} →</Link>
             </div>
           )}
         </>

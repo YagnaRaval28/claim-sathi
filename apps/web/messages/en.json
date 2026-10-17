@@ -69,7 +69,14 @@
     "empty": "No cases yet. Start with your insurer's letter.",
     "continue": "Continue",
     "limit": "You have reached the open-case limit. Close a case to start another.",
-    "documents": "{count} documents"
+    "documents": "{count} documents",
+    "stage": {
+      "S0_PREPARE": "Preparing",
+      "S1_INSURER_GRIEVANCE": "Written to insurer",
+      "S3_OMBUDSMAN": "With the Ombudsman",
+      "CLOSED": "Closed"
+    },
+    "nextDeadline": "Next: {what} · {date}"
   },
   "newCase": {
     "title": "New case",
@@ -105,7 +112,8 @@
     "documents": "Documents",
     "details": "Check details",
     "findings": "Findings",
-    "letter": "Letter"
+    "letter": "Letter",
+    "track": "Track"
   },
   "documents": {
     "title": "Upload your documents",
@@ -261,7 +269,8 @@
     "sendNote": "You send this letter yourself, by email or post, to your insurer's grievance officer.",
     "syntheticSource": "(SYNTHETIC test source)",
     "stale": "Your details changed after this letter was written. Update the findings, then come back.",
-    "goFindings": "Go to findings"
+    "goFindings": "Go to findings",
+    "afterSending": "I've sent it: track deadlines"
   },
   "errors": {
     "network": "Couldn't reach ClaimSathi. Check your connection and try again.",
@@ -289,6 +298,149 @@
     "storage_full": "Uploads are paused for a while. Please try again later.",
     "email_code_invalid": "That code isn't right.",
     "email_code_expired": "This code has expired. Send a new one.",
-    "ai_paused_budget": "Automatic reading is paused for now. You can type your details in."
+    "ai_paused_budget": "Automatic reading is paused for now. You can type your details in.",
+    "case_closed": "This case is closed.",
+    "escalation_blocked": "You can't log this yet: the Ombudsman conditions are not met."
+  },
+  "track": {
+    "title": "Track your case",
+    "nextAction": {
+      "send_letter": "Send your letter to the insurer, then log it here so we can track your deadlines.",
+      "wait_for_insurer": "Wait for your insurer's reply. You can go to the Ombudsman from {date}.",
+      "log_reply": "Did your insurer reply? Log it here.",
+      "go_to_ombudsman": "You can now go to the Insurance Ombudsman.",
+      "wait_for_ombudsman": "Your complaint is with the Ombudsman. A decision usually comes within 3 months of a complete complaint.",
+      "closed": "This case is closed."
+    },
+    "logUpdate": "Log an update",
+    "goOmbudsman": "Go to Ombudsman",
+    "closeCase": "Close case",
+    "confirmClose": "Close this case? Reminders will stop. You can still see it.",
+    "deadlines": "Deadlines",
+    "noDeadlines": "Deadlines appear after you log that you sent your letter.",
+    "daysLeft": "{days} days left",
+    "dueToday": "Today",
+    "passedOn": "Passed on {date}",
+    "howCalculated": "How we calculated this",
+    "basis": "Based on: {basis}. Source: {source}.",
+    "responseNote": "The expected reply date is a guide, not a legal deadline.",
+    "addToCalendar": "Add to calendar",
+    "deadlineKinds": {
+      "insurer_response_expected": "Expected insurer reply",
+      "ombudsman_eligible_from": "You can go to the Ombudsman from",
+      "ombudsman_limitation": "Last day to go to the Ombudsman",
+      "ombudsman_award_expected": "Ombudsman decision usually by"
+    },
+    "basisKeys": {
+      "s1_sent": "letter sent {date}",
+      "insurer_reply": "insurer replied {date}",
+      "s3_filed": "filed with the Ombudsman {date}"
+    },
+    "stages": "Stages",
+    "stageInsurer": "Insurer",
+    "stageBima": "Bima Bharosa",
+    "stageOmbudsman": "Ombudsman",
+    "optional": "Optional · can run alongside",
+    "done": "Done",
+    "current": "Current",
+    "notYet": "Not yet",
+    "eligible": "You can go now",
+    "locked": "Not yet: {reason}",
+    "filedOn": "Filed on {date}",
+    "timeline": "Timeline",
+    "empty": "Log when you send your letter, so we can track deadlines.",
+    "remove": "Remove",
+    "events": {
+      "s1_sent": "Letter sent to the insurer",
+      "insurer_reply": "Insurer replied",
+      "s2_filed": "Filed on Bima Bharosa",
+      "s3_filed": "Filed with the Ombudsman",
+      "ombudsman_outcome": "Ombudsman outcome",
+      "payment_received": "Payment received",
+      "closed": "Case closed"
+    },
+    "meta": {
+      "method": {
+        "email": "by email",
+        "post": "by post",
+        "portal": "on the insurer's website"
+      },
+      "satisfied": {
+        "true": "satisfied",
+        "false": "not satisfied"
+      },
+      "result": {
+        "award": "award in my favour",
+        "dismissed": "dismissed",
+        "settled": "settled",
+        "withdrawn": "withdrawn",
+        "other": "other"
+      }
+    },
+    "sheet": {
+      "title": "Log an update",
+      "what": "What happened?",
+      "date": "Date",
+      "dateHint": "Not in the future, and not before the insurer's letter.",
+      "method": "How did you send it?",
+      "satisfied": "Are you satisfied with the reply?",
+      "yes": "Yes",
+      "no": "No",
+      "token": "Token number (optional)",
+      "reference": "Reference number (optional)",
+      "result": "Outcome",
+      "amount": "Amount received in rupees (optional)",
+      "save": "Save",
+      "cancel": "Cancel",
+      "replyHint": "Add the insurer's reply on the Documents page, then check your case again.",
+      "goDocuments": "Go to Documents"
+    }
+  },
+  "ombudsman": {
+    "title": "Can you go to the Ombudsman yet?",
+    "results": {
+      "pass": "OK",
+      "block": "Not yet",
+      "warn": "Warning",
+      "inform": "Note",
+      "unavailable": "Can't check yet"
+    },
+    "messages": {
+      "write_first": "You need to write to your insurer first.",
+      "wrote_on": "You wrote to your insurer on {date}.",
+      "satisfied_with_reply": "You said you were satisfied with the insurer's reply.",
+      "eligible_since": "You can go to the Ombudsman since {date}.",
+      "wait_for_insurer": "Wait for your insurer's reply. You can go to the Ombudsman from {date}.",
+      "limitation_not_started": "The one-year time limit starts after you write to the insurer.",
+      "file_by": "File by {date} (one-year limit).",
+      "late": "The one-year limit passed on {date}. You can still file, but the Ombudsman may refuse a late complaint.",
+      "in_court": "The Ombudsman can't take a matter that's already in a court, consumer commission or arbitration.",
+      "not_in_court": "Not in any court, consumer commission or arbitration.",
+      "above_cap": "The amount is above ₹50 lakh. The Ombudsman can award at most ₹50 lakh.",
+      "within_cap": "The amount is within the Ombudsman's ₹50 lakh limit.",
+      "complainant_must_sign": "{name} must sign and file this complaint.",
+      "you_sign": "You sign and file the complaint yourself.",
+      "rule_unavailable": "This check isn't available yet."
+    },
+    "fix": {
+      "log_s1_sent": "Log that you wrote to the insurer",
+      "log_insurer_reply": "Log the insurer's reply"
+    },
+    "acknowledge": "I understand",
+    "ready": "You can go to the Ombudsman. File online, by email or by post, free of charge.",
+    "needAck": "Tick each warning to continue.",
+    "logFiled": "Log that I filed",
+    "source": "Source"
+  },
+  "notifications": {
+    "title": "Updates",
+    "kinds": {
+      "eligibility_open": "You can now go to the Insurance Ombudsman.",
+      "insurer_reply_check": "Did your insurer reply? Log it.",
+      "limitation": "{days} days left to go to the Insurance Ombudsman."
+    },
+    "emailFailed": "Email failed",
+    "markRead": "Mark as read",
+    "open": "Open"
   }
 }

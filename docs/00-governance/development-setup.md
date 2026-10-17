@@ -186,6 +186,7 @@ All rows except E2E, API contract and evaluation schema were VERIFIED on 15 Oct 
 | Engine never starts; `wsl -l -v` shows `docker-desktop` Stopped | Docker Desktop WSL backend broken | Restart Docker Desktop or run `wsl --shutdown`, then retry. Or use §3a. |
 | `extension "vector" is not available` | A non-pgvector Postgres image | Use the pgvector image in compose |
 | Port 5433 or 9000 in use | Another Postgres or MinIO already running | Change the compose port mapping and `.env` |
+| `[Errno 10048]` binding the API to port 8000 | Another app already uses 8000 | Start the API with `--port 8010` and the web with `API_UPSTREAM_URL=http://127.0.0.1:8010` |
 | API exits: `config error: FIELD_DATA_KEY missing` | `.env` not filled in | Generate the values per §4 |
 | Gemini free tier `429` | Free-tier rate limit | Lower concurrency; use `fake` for routine tests |
 | Next.js type-check errors after install | TypeScript major mismatch (CI-16) | Use the TypeScript version pinned at scaffold time |
