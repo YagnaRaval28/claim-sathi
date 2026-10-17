@@ -9,6 +9,7 @@ export type Problem = {
   errors?: { field: string; code: string; message: string }[];
   attempts_left?: number;
   retry_after_s?: number;
+  current_version?: number;
 };
 
 export class ApiError extends Error {

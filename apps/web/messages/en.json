@@ -275,7 +275,16 @@
     "goFindings": "Go to findings",
     "afterSending": "I've sent it: track deadlines",
     "copyText": "Copy as email text",
-    "copied": "Copied"
+    "copied": "Copied",
+    "edit": "Edit letter",
+    "doneEditing": "Done",
+    "undo": "Undo",
+    "addParagraph": "+ Add paragraph",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "unverified": "This is no longer a verified quote",
+    "editedNote": "Edited by you · not verified",
+    "paragraph": "Paragraph"
   },
   "errors": {
     "network": "Couldn't reach ClaimSathi. Check your connection and try again.",

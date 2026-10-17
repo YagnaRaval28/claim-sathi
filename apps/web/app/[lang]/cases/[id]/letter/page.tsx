@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LetterEditor } from "@/components/letter-editor";
 import { LetterActions, LetterPaper, type Letter } from "@/components/letter-paper";
 import { Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -15,6 +16,7 @@ export default function LetterPage() {
   const { me, gate } = useRequireUser();
   const [letter, setLetter] = useState<Letter | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (!me) return;
@@ -41,8 +43,15 @@ export default function LetterPage() {
       {letter && (
         <>
           <Callout tone="info">{t("letter.basic")}</Callout>
-          <LetterPaper caseId={id} letter={letter} />
-          {!stale && (
+          {editing ? (
+            <LetterEditor letter={letter} onSaved={setLetter} onDone={() => setEditing(false)} />
+          ) : (
+            <>
+              <LetterPaper caseId={id} letter={letter} />
+              {!stale && <button className="btn btn-secondary" onClick={() => setEditing(true)}>{t("letter.edit")}</button>}
+            </>
+          )}
+          {!stale && !editing && (
             <div className="action-bar">
               <LetterActions letter={letter} onChange={setLetter} onError={setError} />
               <p className="muted">{t("letter.sendNote")}</p>
