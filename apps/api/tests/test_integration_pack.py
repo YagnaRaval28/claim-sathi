@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from claimsathi.context import AppContext
 from claimsathi.core.clock import IST, set_clock
@@ -27,19 +28,23 @@ def clock() -> Any:
     set_clock(None)
 
 
-def _event(client: TestClient, h: dict[str, str], cid: str, kind: str, day: str, meta: dict[str, Any] | None = None):
-    r = client.post(
+def _event(
+    client: TestClient, h: dict[str, str], cid: str, kind: str, day: str, meta: dict[str, Any] | None = None
+) -> Response:
+    r: Response = client.post(
         f"/api/v1/cases/{cid}/events",
         json={"kind": kind, "event_date": day, "metadata": meta or {}},
         headers={**h, "Idempotency-Key": str(uuid.uuid4())},
     )
     assert r.status_code == 201, r.text
+    return r
 
 
-def _pack(client: TestClient, h: dict[str, str], cid: str):
-    return client.post(
+def _pack(client: TestClient, h: dict[str, str], cid: str) -> Response:
+    resp: Response = client.post(
         f"/api/v1/cases/{cid}/packs/ombudsman", json={}, headers={**h, "Idempotency-Key": str(uuid.uuid4())}
     )
+    return resp
 
 
 def _text(letter: dict[str, Any]) -> str:

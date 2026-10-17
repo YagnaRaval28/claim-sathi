@@ -28,7 +28,8 @@ def _new_case(tc: TestClient, h: dict[str, str], key: str | None = None) -> dict
         "/api/v1/cases", json={"eligibility": ELIGIBILITY}, headers={**h, "Idempotency-Key": key or str(uuid.uuid4())}
     )
     assert r.status_code == 201, r.text
-    return r.json()
+    body: dict[str, Any] = r.json()
+    return body
 
 
 def _upload_syn001(tc: TestClient, h: dict[str, str], case_id: str) -> None:

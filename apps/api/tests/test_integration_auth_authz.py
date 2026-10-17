@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from datetime import timedelta
 
@@ -11,15 +10,14 @@ from fastapi.testclient import TestClient
 
 from claimsathi.context import AppContext
 from claimsathi.core.clock import now_utc, set_clock
-from tests.conftest import ELIGIBILITY, csrf_headers, sign_in
+from tests.conftest import ELIGIBILITY, code_in, csrf_headers, last_mail_to, sign_in
 from tests.test_integration_vs1 import _to_findings
 
 pytestmark = pytest.mark.integration
 
 
 def _code(ctx: AppContext, email: str) -> str:
-    mail = [m for m in ctx.mailer.sent if m["to"] == email.strip().lower()][-1]  # type: ignore[attr-defined]
-    return re.search(r"\b(\d{6})\b", mail["text"]).group(1)  # type: ignore[union-attr]
+    return code_in(last_mail_to(ctx, email)["text"])
 
 
 @pytest.mark.req("FR-001")

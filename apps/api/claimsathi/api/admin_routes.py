@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from typing import Any, Literal
+from datetime import date
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -265,3 +266,137 @@ def list_admins(
             }
         )
     return {"items": out}
+
+
+# --- Knowledge base (FR-038) and rules (FR-039): admin role only -------------------------------------
+
+
+@router.get("/sources")
+def admin_sources(admin: AdminUser = Depends(admin_only), s: Session = Depends(db)) -> dict[str, Any]:
+    from claimsathi.admin import content
+
+    return {"items": content.list_sources(s)}
+
+
+@router.post("/sources", status_code=201)
+async def admin_create_source(
+    file: Annotated[UploadFile, File()],
+    type: Annotated[Literal["regulation", "policy_wording"], Form()],
+    issuer: Annotated[str, Form(max_length=200)],
+    title: Annotated[str, Form(max_length=300)],
+    identifier: Annotated[str, Form(max_length=120)],
+    version: Annotated[str, Form(max_length=40)],
+    effective_from: Annotated[date, Form()],
+    effective_to: Annotated[date | None, Form()] = None,
+    url: Annotated[str | None, Form(max_length=500)] = None,
+    admin: AdminUser = Depends(admin_only),
+    s: Session = Depends(db),
+) -> dict[str, Any]:
+    """Upload an official PDF (text layer) or a UTF-8 text file. It becomes a draft with clause chunks."""
+    from claimsathi.admin import content
+    from claimsathi.documents.service import read_pdf_lines, sniff_mime
+
+    data = await file.read(20 * 1024 * 1024 + 1)
+    if len(data) > 20 * 1024 * 1024:
+        raise AppError("payload_too_large", 413, "Files can be up to 20 MB.")
+    if sniff_mime(data) == "application/pdf":
+        text = "\n".join("\n".join(page) for page in read_pdf_lines(data))
+    else:
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise AppError("unsupported_media_type", 415, "Upload a PDF or a UTF-8 text file.") from exc
+    src = content.create_draft(
+        s,
+        admin,
+        type=type,
+        issuer=issuer,
+        title=title,
+        identifier=identifier,
+        version=version,
+        effective_from=effective_from,
+        effective_to=effective_to,
+        url=url,
+        text=text,
+    )
+    return {"id": str(src.id), "status": src.status}
+
+
+@router.get("/sources/{source_id}/chunks")
+def admin_source_chunks(
+    source_id: uuid.UUID, admin: AdminUser = Depends(admin_only), s: Session = Depends(db)
+) -> dict[str, Any]:
+    from claimsathi.admin import content
+
+    return {"items": content.chunks(s, content.owned_source(s, source_id))}
+
+
+class PublishIn(_In):
+    attest_checked: bool
+
+
+@router.post("/sources/{source_id}/publish", status_code=204)
+def admin_publish_source(
+    source_id: uuid.UUID, body: PublishIn, admin: AdminUser = Depends(admin_only), s: Session = Depends(db)
+) -> Response:
+    from claimsathi.admin import content
+
+    content.publish(s, admin, content.owned_source(s, source_id), body.attest_checked)
+    return Response(status_code=204)
+
+
+@router.post("/sources/{source_id}/retire", status_code=204)
+def admin_retire_source(
+    source_id: uuid.UUID, admin: AdminUser = Depends(admin_only), s: Session = Depends(db)
+) -> Response:
+    from claimsathi.admin import content
+
+    content.retire(s, admin, content.owned_source(s, source_id))
+    return Response(status_code=204)
+
+
+@router.get("/rules")
+def admin_rules(admin: AdminUser = Depends(admin_only), s: Session = Depends(db)) -> dict[str, Any]:
+    from claimsathi.admin import content
+
+    return {"items": content.list_rules(s)}
+
+
+class RuleVersionIn(_In):
+    kind: str | None = Field(default=None, max_length=16)
+    params: dict[str, Any]
+    source_ref: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/rules/{rule_key}/versions", status_code=201)
+def admin_new_rule_version(
+    rule_key: str, body: RuleVersionIn, admin: AdminUser = Depends(admin_only), s: Session = Depends(db)
+) -> dict[str, Any]:
+    from claimsathi.admin import content
+
+    if not rule_key.startswith("RULE-") or len(rule_key) > 48:
+        raise AppError("validation_error", 422, "Rule keys look like RULE-XXX-00.")
+    r = content.new_version(s, admin, rule_key, kind=body.kind, params=body.params, source_ref=body.source_ref)
+    return content.rule_view(r)
+
+
+class EnableIn(_In):
+    verified_by: str = Field(min_length=1, max_length=200)
+
+
+@router.post("/rules/{rule_key}/versions/{version}/enable")
+def admin_enable_rule(
+    rule_key: str, version: int, body: EnableIn, admin: AdminUser = Depends(admin_only), s: Session = Depends(db)
+) -> dict[str, Any]:
+    from claimsathi.admin import content
+
+    return content.rule_view(content.enable(s, admin, rule_key, version, body.verified_by))
+
+
+@router.post("/rules/{rule_key}/versions/{version}/disable")
+def admin_disable_rule(
+    rule_key: str, version: int, admin: AdminUser = Depends(admin_only), s: Session = Depends(db)
+) -> dict[str, Any]:
+    from claimsathi.admin import content
+
+    return content.rule_view(content.disable(s, admin, rule_key, version))

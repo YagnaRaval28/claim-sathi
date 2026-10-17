@@ -44,7 +44,7 @@ jobs:
       - name: Lint and format
         run: uv run ruff check . && uv run ruff format --check .
       - name: Types
-        run: uv run mypy claimsathi
+        run: uv run mypy claimsathi tests
       - name: Migrations apply cleanly and match the models
         run: uv run alembic upgrade head && uv run alembic check
       - name: Tests (unit + integration + authorization matrix)

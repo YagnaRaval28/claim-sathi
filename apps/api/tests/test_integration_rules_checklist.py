@@ -45,7 +45,8 @@ def _rejected_case(client: TestClient, ctx: AppContext, email: str) -> tuple[dic
 
 
 def _analysis(client: TestClient, cid: str) -> dict[str, Any]:
-    return client.get(f"/api/v1/cases/{cid}/analyses/latest").json()
+    body: dict[str, Any] = client.get(f"/api/v1/cases/{cid}/analyses/latest").json()
+    return body
 
 
 def _set_fact(client: TestClient, h: dict[str, str], cid: str, name: str, value: str) -> None:

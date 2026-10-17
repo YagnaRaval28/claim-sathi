@@ -7,7 +7,12 @@ from datetime import UTC, date, datetime, timedelta, timezone
 
 IST = timezone(timedelta(hours=5, minutes=30), "IST")
 
-_now: Callable[[], datetime] = lambda: datetime.now(UTC)  # noqa: E731
+
+def _system_now() -> datetime:
+    return datetime.now(UTC)
+
+
+_now: Callable[[], datetime] = _system_now
 
 
 def now_utc() -> datetime:

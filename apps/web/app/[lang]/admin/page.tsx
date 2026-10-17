@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { AdminNav } from "@/components/admin-nav";
 import { api, ApiError } from "@/lib/api";
 
 type Item = {
@@ -54,6 +55,7 @@ export default function AdminHome() {
   if (!me) return <div className="page">Loading…</div>;
   return (
     <div className="page">
+      <AdminNav current="queue" />
       <div className="ledger-row">
         <h1>Review queue</h1>
         <span className="muted">{me.email_masked} · {me.role} <button className="btn btn-ghost" onClick={signOut}>Sign out</button></span>

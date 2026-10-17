@@ -7,6 +7,7 @@ import json
 import os
 
 import pytest
+from cryptography.exceptions import InvalidTag
 from pydantic import ValidationError
 
 from claimsathi.ai.gateway import (
@@ -14,6 +15,7 @@ from claimsathi.ai.gateway import (
     CallRecord,
     ModelGateway,
     ModelOutputInvalid,
+    Provider,
     ProviderResult,
     TransientProviderError,
 )
@@ -34,7 +36,7 @@ def test_field_cipher_roundtrip_and_tamper_detection() -> None:
     c = FieldCipher(KEY)
     blob = c.encrypt("Ravi K. Mehta")
     assert b"Ravi" not in blob and c.decrypt(blob) == "Ravi K. Mehta"
-    with pytest.raises(Exception):  # noqa: B017  (AES-GCM authentication failure)
+    with pytest.raises(InvalidTag):  # AES-GCM authentication failure
         c.decrypt(blob[:-1] + bytes([blob[-1] ^ 1]))
 
 
@@ -59,7 +61,7 @@ def test_config_refuses_free_ai_tier_in_prod(monkeypatch: pytest.MonkeyPatch) ->
     for k, v in _env(APP_ENV="prod", LLM_PROVIDER="gemini_dev").items():
         monkeypatch.setenv(k, v)
     with pytest.raises(ValidationError, match="D-008"):
-        Settings(_env_file=None)  # type: ignore[call-arg]
+        Settings(_env_file=None)
 
 
 @pytest.mark.parametrize("over", [{"STORAGE_BACKEND": "memory"}, {"MAILER": "memory"}])
@@ -67,14 +69,14 @@ def test_config_refuses_memory_backends_in_staging(monkeypatch: pytest.MonkeyPat
     for k, v in _env(APP_ENV="staging", **over).items():
         monkeypatch.setenv(k, v)
     with pytest.raises(ValidationError, match="only allowed locally"):
-        Settings(_env_file=None)  # type: ignore[call-arg]
+        Settings(_env_file=None)
 
 
 def test_config_rejects_short_key_without_echoing_it(monkeypatch: pytest.MonkeyPatch) -> None:
     for k, v in _env(FIELD_DATA_KEY=base64.b64encode(b"short-secret-value").decode()).items():
         monkeypatch.setenv(k, v)
     with pytest.raises(ValidationError) as ei:
-        Settings(_env_file=None)  # type: ignore[call-arg]
+        Settings(_env_file=None)
     assert "short-secret-value" not in str(ei.value)
 
 
@@ -127,12 +129,15 @@ class _Seq:
         return ProviderResult(text=str(out), input_tokens=100, output_tokens=10)
 
 
-def _gw(provider: object, records: list[CallRecord], spent: int = 0) -> ModelGateway:
+def _gw(provider: Provider, records: list[CallRecord], spent: int = 0) -> ModelGateway:
+    def record(r: CallRecord) -> None:
+        records.append(r)
+
     return ModelGateway(
         provider,
         model="gemini-2.5-flash",
         timeout_s=1,
-        record=records.append,  # type: ignore[arg-type]
+        record=record,
         spent_micro_usd=lambda: spent,
         budget_micro_usd=1000,
         sleep=lambda _: None,

@@ -8,13 +8,14 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 from sqlalchemy import select
 
 from claimsathi.context import AppContext
 from claimsathi.core.clock import IST, set_clock
 from claimsathi.escalation.service import send_due_reminders
 from claimsathi.models import Reminder
-from tests.conftest import csrf_headers, sign_in
+from tests.conftest import csrf_headers, sent_mail, sign_in
 from tests.test_integration_vs1 import _new_case, _upload_syn001
 
 pytestmark = pytest.mark.integration
@@ -47,18 +48,22 @@ def _case(client: TestClient, ctx: AppContext, *, reminders: bool = True) -> tup
     return h, cid
 
 
-def _event(client: TestClient, h: dict[str, str], cid: str, kind: str, day: str, meta: dict[str, Any] | None = None):
-    return client.post(
+def _event(
+    client: TestClient, h: dict[str, str], cid: str, kind: str, day: str, meta: dict[str, Any] | None = None
+) -> Response:
+    resp: Response = client.post(
         f"/api/v1/cases/{cid}/events",
         json={"kind": kind, "event_date": day, "metadata": meta or {}},
         headers={**h, "Idempotency-Key": str(uuid.uuid4())},
     )
+    return resp
 
 
 def _esc(client: TestClient, cid: str) -> dict[str, Any]:
     r = client.get(f"/api/v1/cases/{cid}/escalation")
     assert r.status_code == 200, r.text
-    return r.json()
+    body: dict[str, Any] = r.json()
+    return body
 
 
 @pytest.mark.req("FR-023")
@@ -140,11 +145,11 @@ def test_due_reminders_are_sent_exactly_once_without_medical_details(
     clock("2026-10-17")
     h, cid = _case(client, ctx)
     assert _event(client, h, cid, "s1_sent", "2026-10-15", {"method": "email"}).status_code == 201
-    before = len(ctx.mailer.sent)  # type: ignore[attr-defined]
+    before = len(sent_mail(ctx))
     due = datetime(2026, 10, 29, 10, tzinfo=IST)
     assert send_due_reminders(ctx, due) == 2  # in-app + email for the expected insurer reply
     assert send_due_reminders(ctx, due) == 0  # duplicate run sends nothing
-    mails = ctx.mailer.sent[before:]  # type: ignore[attr-defined]
+    mails = sent_mail(ctx)[before:]
     assert len(mails) == 1
     body = mails[0]["subject"] + mails[0]["text"]
     # FR-022 AC2: the nickname and the action only; no amounts, claim numbers or medical details
@@ -232,7 +237,9 @@ def test_escalation_endpoints_are_owner_only(client: TestClient, ctx: AppContext
     assert client.get(f"/api/v1/cases/{cid}/escalation").status_code == 401
 
 
-def test_reminder_retry_then_failed_after_three_attempts(client: TestClient, ctx: AppContext, clock: Any) -> None:
+def test_reminder_retry_then_failed_after_three_attempts(
+    client: TestClient, ctx: AppContext, clock: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     clock("2026-10-17")
     h, cid = _case(client, ctx)
     assert _event(client, h, cid, "s1_sent", "2026-10-15", {"method": "email"}).status_code == 201
@@ -241,15 +248,11 @@ def test_reminder_retry_then_failed_after_three_attempts(client: TestClient, ctx
         def send(self, *, to: str, subject: str, text: str) -> None:
             raise ConnectionError("smtp down")
 
-    real = ctx.mailer
-    ctx.mailer = Down()  # type: ignore[misc]
-    try:
-        t = datetime(2026, 10, 29, 10, tzinfo=IST)
-        for _ in range(3):
-            send_due_reminders(ctx, t)
-            t += timedelta(hours=3)
-    finally:
-        ctx.mailer = real  # type: ignore[misc]
+    monkeypatch.setattr(ctx, "mailer", Down())
+    t = datetime(2026, 10, 29, 10, tzinfo=IST)
+    for _ in range(3):
+        send_due_reminders(ctx, t)
+        t += timedelta(hours=3)
     with ctx.session_factory() as s:
         r = s.scalar(select(Reminder).where(Reminder.channel == "email", Reminder.kind == "insurer_reply_check"))
         assert r is not None and r.status == "failed" and r.attempts == 3

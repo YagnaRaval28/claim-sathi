@@ -345,6 +345,7 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
             else None
         ),
         "totals": a.totals,
+        "rule_versions": a.rule_versions,  # FR-039 AC2: the rule versions this analysis applied
         "line_items": [
             {
                 "id": str(li.id),

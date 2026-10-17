@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from claimsathi.context import AppContext
 from claimsathi.letters.render import letter_html
@@ -24,10 +25,11 @@ def _letter(client: TestClient, ctx: AppContext) -> tuple[dict[str, str], dict[s
     return h, r.json()
 
 
-def _patch(client: TestClient, h: dict[str, str], letter: dict[str, Any], blocks: list[dict[str, Any]]):
-    return client.patch(
+def _patch(client: TestClient, h: dict[str, str], letter: dict[str, Any], blocks: list[dict[str, Any]]) -> Response:
+    resp: Response = client.patch(
         f"/api/v1/letters/{letter['id']}", json={"base_version": letter["version"], "blocks": blocks}, headers=h
     )
+    return resp
 
 
 @pytest.mark.req("FR-027")

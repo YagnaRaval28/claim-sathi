@@ -18,7 +18,7 @@ from claimsathi.context import AppContext
 from claimsathi.core.clock import IST, now_utc
 from claimsathi.datacontrols.service import run_retention
 from claimsathi.models import AuditLog, Case, CaseEvent, Document, ExtractedField, Outbox, ReviewItem, User
-from tests.conftest import csrf_headers, sign_in
+from tests.conftest import code_in, csrf_headers, last_mail_to, sent_mail, sign_in, store_keys
 from tests.test_integration_vs1 import _new_case, _to_findings, _upload_syn001
 
 pytestmark = pytest.mark.integration
@@ -27,11 +27,12 @@ pytestmark = pytest.mark.integration
 def _challenge(client: TestClient, h: dict[str, str], url: str) -> dict[str, str]:
     r = client.post(url, headers=h)
     assert r.status_code == 200, r.text
-    return r.json()
+    body: dict[str, str] = r.json()
+    return body
 
 
 def _store_keys(ctx: AppContext, prefix: str) -> list[str]:
-    return [k for k in ctx.store.objects if k.startswith(prefix)]  # type: ignore[attr-defined]
+    return store_keys(ctx, prefix)
 
 
 @pytest.mark.req("FR-031")
@@ -94,7 +95,7 @@ def test_delete_account_then_sign_in_creates_a_fresh_empty_account(client: TestC
         headers={**h, "X-Confirm-Challenge": ch["challenge_id"]},
     )
     assert r.status_code == 202
-    assert ctx.mailer.sent[-1]["subject"] == "Your ClaimSathi account was deleted"  # type: ignore[attr-defined]
+    assert sent_mail(ctx)[-1]["subject"] == "Your ClaimSathi account was deleted"
     assert client.get("/api/v1/me").status_code == 401
     assert _store_keys(ctx, f"cases/{cid}/") == []
     with ctx.session_factory() as s:
@@ -252,8 +253,7 @@ def test_report_holds_only_the_flagged_output(client: TestClient, ctx: AppContex
 def test_change_email_with_a_code_and_consent_history(client: TestClient, ctx: AppContext) -> None:
     h = sign_in(client, ctx, "old@example.com")
     assert client.post("/api/v1/me/email", json={"new_email": "new@example.com"}, headers=h).status_code == 204
-    mail = [m for m in ctx.mailer.sent if m["to"] == "new@example.com"][-1]  # type: ignore[attr-defined]
-    code = re.search(r"\b(\d{6})\b", mail["text"]).group(1)  # type: ignore[union-attr]
+    code = code_in(last_mail_to(ctx, "new@example.com")["text"])
     bad = f"{(int(code) + 1) % 1_000_000:06d}"
     assert client.post("/api/v1/me/email/verify", json={"code": bad}, headers=h).status_code == 401
     assert client.post("/api/v1/me/email/verify", json={"code": code}, headers=h).status_code == 204

@@ -3,75 +3,21 @@ case content only under the user's 7-day grant."""
 
 from __future__ import annotations
 
-import base64
-import json
-import time
 import uuid
 from datetime import timedelta
-from typing import Any
-from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 from sqlalchemy import select
 
-from claimsathi.admin.service import seed_bootstrap_admin
-from claimsathi.auth import google
 from claimsathi.context import AppContext
 from claimsathi.core.clock import now_utc, set_clock
 from claimsathi.models import AdminUser, AuditLog
 from claimsathi.security.totp import totp
-from tests.conftest import csrf_headers, sign_in
+from tests.conftest import _google_admin, admin_sign_in, csrf_headers, sign_in
 from tests.test_integration_vs1 import _to_findings
 
 pytestmark = pytest.mark.integration
-ADMIN_CLIENT = "admin-client.apps.googleusercontent.com"
-BOSS = "boss@example.com"
-
-
-@pytest.fixture
-def admin_ctx(ctx: AppContext) -> AppContext:
-    ctx.settings.admin_oauth_client_id = ADMIN_CLIENT
-    ctx.settings.admin_oauth_client_secret = SecretStr("admin-secret")
-    ctx.settings.admin_bootstrap_email = BOSS
-    with ctx.session_factory() as s:
-        seed_bootstrap_admin(ctx, s)
-    return ctx
-
-
-def _b64(d: dict[str, Any]) -> str:
-    return base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b"=").decode()
-
-
-def _google_admin(client: TestClient, monkeypatch: pytest.MonkeyPatch, email: str = BOSS) -> Any:
-    r = client.get("/api/v1/admin/auth/google/start", follow_redirects=False)
-    q = parse_qs(urlparse(r.headers["location"]).query)
-    claims = {
-        "iss": "https://accounts.google.com",
-        "aud": ADMIN_CLIENT,
-        "sub": f"g-{email}",
-        "email": email,
-        "email_verified": True,
-        "nonce": q["nonce"][0],
-        "exp": int(time.time()) + 300,
-    }
-    token = f"{_b64({'alg': 'RS256'})}.{_b64(claims)}.sig"
-    monkeypatch.setattr(google, "exchange_code", lambda *_a, **_k: {"id_token": token})
-    return client.get(f"/api/v1/admin/auth/google/callback?code=x&state={q['state'][0]}", follow_redirects=False)
-
-
-def _admin_sign_in(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
-    r = _google_admin(client, monkeypatch)
-    assert r.status_code == 302 and r.headers["location"] == "/en/admin/mfa"
-    setup = client.get("/api/v1/admin/auth/mfa").json()
-    secret = setup.get("secret")
-    if secret is None:  # already enrolled earlier in the test
-        raise AssertionError("expected enrolment")
-    h = csrf_headers(client)
-    assert client.post("/api/v1/admin/auth/totp", json={"code": totp(secret)}, headers=h).status_code == 204
-    client.headers["x-test-totp"] = secret
-    return h
 
 
 @pytest.mark.req("FR-037")
@@ -127,7 +73,7 @@ def test_consumer_and_admin_sessions_never_cross(
     assert client.get("/api/v1/admin/me").status_code == 401  # AC1: consumer session rejected
     assert client.get("/api/v1/admin/review-items").status_code == 401
     client.cookies.clear()
-    _admin_sign_in(client, monkeypatch)
+    admin_sign_in(client, monkeypatch)
     assert client.get("/api/v1/me").status_code == 401  # and an admin session is not a user session
 
 
@@ -151,7 +97,7 @@ def test_review_queue_and_case_content_only_under_the_users_grant(
     assert r.status_code == 201
     user_cookies = dict(client.cookies)
     client.cookies.clear()
-    ha = _admin_sign_in(client, monkeypatch)
+    ha = admin_sign_in(client, monkeypatch)
     items = client.get("/api/v1/admin/review-items").json()["items"]
     item = next(i for i in items if i["source"] == "user_report")
     assert item["payload"]["statement"] and item["case_access_until"] is None
@@ -201,6 +147,6 @@ def test_reviewer_cannot_use_admin_only_endpoints(
         assert admin is not None
         admin.role = "reviewer"
         s.commit()
-    _admin_sign_in(client, monkeypatch)
+    admin_sign_in(client, monkeypatch)
     assert client.get("/api/v1/admin/review-items").status_code == 200
     assert client.get("/api/v1/admin/admins").status_code == 403
