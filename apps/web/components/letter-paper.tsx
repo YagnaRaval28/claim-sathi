@@ -61,7 +61,7 @@ export function LetterActions({ letter, onChange, onError }: {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  async function download() {
+  async function download(format: "pdf" | "docx") {
     if (!read) return;
     setBusy(true);
     onError(null);
@@ -69,7 +69,7 @@ export function LetterActions({ letter, onChange, onError }: {
       if (letter.reviewed_version !== letter.version) {
         onChange(await api<Letter>(`/letters/${letter.id}/review`, { body: { version: letter.version } }));
       }
-      const exp = await api<{ download_path: string }>(`/letters/${letter.id}/exports`, { body: { format: "pdf" } });
+      const exp = await api<{ download_path: string }>(`/letters/${letter.id}/exports`, { body: { format } });
       window.location.assign(exp.download_path);
     } catch (e) { onError(e); }
     setBusy(false);
@@ -91,9 +91,13 @@ export function LetterActions({ letter, onChange, onError }: {
         <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} />
         <span>{t("letter.read")}</span>
       </label>
-      <button className="btn btn-primary btn-block" onClick={download} disabled={!read || busy}
+      <button className="btn btn-primary btn-block" onClick={() => download("pdf")} disabled={!read || busy}
               aria-disabled={!read || busy} aria-busy={busy}>
         {busy ? t("letter.downloading") : t("letter.download")}
+      </button>
+      <button className="btn btn-secondary btn-block" onClick={() => download("docx")} disabled={!read || busy}
+              aria-disabled={!read || busy}>
+        {t("letter.downloadDocx")}
       </button>
       {!read && <p className="muted">{t("letter.readFirst")}</p>}
       <button className="btn btn-secondary btn-block" onClick={copy} aria-live="polite">

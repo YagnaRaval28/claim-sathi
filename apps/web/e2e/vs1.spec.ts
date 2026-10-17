@@ -28,6 +28,19 @@ test("VS-1: partly paid claim from upload to letter download", async ({ page }) 
   expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
 });
 
+test("Word download works (also on Windows, where PDF needs GTK)", async ({ page }) => {
+  await newCase(page, "Rejected");
+  await uploadAndContinue(page, syn002Pdf());
+  await page.getByRole("button", { name: "These details are correct" }).click();
+  await page.getByRole("link", { name: /Continue/ }).click();
+  await page.getByRole("button", { name: "Check my case" }).click();
+  await page.getByRole("link", { name: /Write my letter/ }).click();
+  await page.getByLabel("I've read this letter and it's correct").check();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download Word (.docx)" }).click();
+  expect((await download).suggestedFilename()).toBe("claimsathi-letter.docx");
+});
+
 test("rejected claim: the reason without a clause gets a finding and a letter", async ({ page }) => {
   await newCase(page, "Rejected");
   await uploadAndContinue(page, syn002Pdf());

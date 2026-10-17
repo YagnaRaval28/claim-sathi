@@ -19,6 +19,7 @@ dependencies = [
   "cryptography>=46",
   "python-multipart>=0.0.20",
   "google-genai>=2.31,<3",
+  "python-docx>=1.2,<2",
 ]
 
 [dependency-groups]

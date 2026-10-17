@@ -30,7 +30,7 @@ from claimsathi.core.errors import AppError, not_found
 from claimsathi.documents.service import upload
 from claimsathi.extraction import service as facts
 from claimsathi.guards import idempotent_replay, idempotent_store
-from claimsathi.letters.service import create_basic_letter, export_pdf, letter_view, owned_letter
+from claimsathi.letters.service import MIME, create_basic_letter, export_letter, letter_view, owned_letter
 from claimsathi.models import Case, KnowledgeChunk, KnowledgeSource, LetterExport, User
 from claimsathi.security.crypto import new_token
 
@@ -542,7 +542,7 @@ def review_letter(
 
 
 class ExportIn(_In):
-    format: Literal["pdf"] = "pdf"
+    format: Literal["pdf", "docx"] = "pdf"
 
 
 @router.post("/letters/{letter_id}/exports")
@@ -554,7 +554,7 @@ def post_export(
     c: AppContext = Depends(ctx),
 ) -> dict[str, Any]:
     letter, case = owned_letter(s, letter_id, user.id)
-    exp = export_pdf(c, s, letter, case)
+    exp = export_letter(c, s, letter, case, body.format)
     return {
         "id": str(exp.id),
         "format": exp.format,
@@ -576,6 +576,9 @@ def download_export(
         raise not_found()
     return Response(
         c.store.get(exp.storage_key),
-        media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="claimsathi-letter.pdf"', "Cache-Control": "no-store"},
+        media_type=MIME.get(exp.format, "application/octet-stream"),
+        headers={
+            "Content-Disposition": f'attachment; filename="claimsathi-letter.{exp.format}"',
+            "Cache-Control": "no-store",
+        },
     )

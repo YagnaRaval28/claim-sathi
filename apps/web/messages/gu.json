@@ -284,7 +284,8 @@
     "saved": "સેવ થયું",
     "unverified": "આ હવે ચકાસાયેલ અવતરણ નથી",
     "editedNote": "તમે ફેરફાર કર્યો · ચકાસાયેલ નથી",
-    "paragraph": "ફકરો"
+    "paragraph": "ફકરો",
+    "downloadDocx": "Word (.docx) ડાઉનલોડ કરો"
   },
   "errors": {
     "network": "ClaimSathi સુધી પહોંચી શકાયું નહીં. તમારું કનેક્શન તપાસો અને ફરી પ્રયાસ કરો.",

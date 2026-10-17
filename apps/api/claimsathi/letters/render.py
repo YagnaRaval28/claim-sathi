@@ -64,3 +64,56 @@ def render_pdf(doc: dict[str, Any]) -> bytes:
 
     pdf: bytes = HTML(string=letter_html(doc)).write_pdf()
     return pdf
+
+
+def render_docx(doc: dict[str, Any]) -> bytes:
+    """FR-028 DOCX: A4, Noto Serif (Gujarati/Devanagari fall back to the Noto Serif families), citation markers
+    in the text and a numbered Sources list (python-docx cannot write native Word footnotes)."""
+    import io
+
+    from docx import Document as DocxDocument
+    from docx.enum.section import WD_ORIENT
+    from docx.shared import Mm, Pt
+
+    d = DocxDocument()
+    section = d.sections[0]
+    section.orientation = WD_ORIENT.PORTRAIT
+    section.page_width, section.page_height = Mm(210), Mm(297)
+    for side in ("left_margin", "right_margin", "top_margin", "bottom_margin"):
+        setattr(section, side, Mm(25))
+    style = d.styles["Normal"]
+    style.font.name = "Noto Serif"
+    style.font.size = Pt(11.5)
+    for b in doc["blocks"]:
+        t = b["type"]
+        if t == "list":
+            for item in b.get("items", []):
+                d.add_paragraph(str(item))
+        elif t == "heading":
+            p = d.add_paragraph()
+            p.add_run(str(b.get("text", ""))).bold = True
+        elif t == "quote":
+            p = d.add_paragraph()
+            p.paragraph_format.left_indent = Mm(8)
+            p.add_run(str(b.get("text", "")))
+            marker = p.add_run(f"[{int(b['footnote'])}]")
+            marker.font.superscript = True
+        else:
+            p = d.add_paragraph()
+            run = p.add_run(str(b.get("text", "")))
+            run.bold = t == "subject"
+    notes = doc.get("footnotes", [])
+    if notes:
+        p = d.add_paragraph()
+        p.add_run("Sources").bold = True
+        for n in notes:
+            synthetic = " (SYNTHETIC test source)" if n.get("synthetic") else ""
+            d.add_paragraph(
+                f"[{int(n['n'])}] {n['source_title']}, {n.get('clause_ref') or ''}, version {n['version']}{synthetic}"
+            )
+    disclaimer = d.add_paragraph()
+    run = disclaimer.add_run(str(doc.get("disclaimer", "")))
+    run.font.size = Pt(8.5)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()

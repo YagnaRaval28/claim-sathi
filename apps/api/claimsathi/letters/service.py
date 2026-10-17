@@ -538,6 +538,21 @@ def edit_letter(s: Session, letter: Letter, case: Case, base_version: int, block
     return letter
 
 
+def _audit_export(s: Session, exp: LetterExport) -> None:
+    """FR-028 AC3: the export event is logged (ids only, no content)."""
+    from claimsathi.models import AuditLog
+
+    s.add(
+        AuditLog(
+            actor_type="user",
+            actor_id=None,
+            action=f"letter_exported_{exp.format}",
+            entity_type="letter",
+            entity_id=str(exp.letter_id),
+        )
+    )
+
+
 def letter_view(s: Session, letter: Letter, case: Case) -> dict[str, Any]:
     stale = bool(case.stale_since and case.stale_since > letter.created_at)
     return {
@@ -566,7 +581,15 @@ def owned_letter(s: Session, letter_id: uuid.UUID, user_id: uuid.UUID) -> tuple[
     return row[0], row[1]
 
 
+MIME = {"pdf": "application/pdf", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+
+
 def export_pdf(c: AppContext, s: Session, letter: Letter, case: Case) -> LetterExport:
+    return export_letter(c, s, letter, case, "pdf")
+
+
+def export_letter(c: AppContext, s: Session, letter: Letter, case: Case, fmt: str) -> LetterExport:
+    """FR-028: PDF or DOCX of the reviewed version; blocked before review and while stale (AI-007, FR-011)."""
     if letter.reviewed_version != letter.version:
         raise AppError("letter_not_reviewed", 409, "Please read the letter and confirm before downloading.")
     if case.stale_since and case.stale_since > letter.created_at:
@@ -575,22 +598,24 @@ def export_pdf(c: AppContext, s: Session, letter: Letter, case: Case) -> LetterE
         select(LetterExport).where(
             LetterExport.letter_id == letter.id,
             LetterExport.letter_version == letter.version,
-            LetterExport.format == "pdf",
+            LetterExport.format == fmt,
         )
     )
     if existing is not None:
         return existing
-    from claimsathi.letters.render import RendererUnavailable, render_pdf
+    from claimsathi.letters.render import RendererUnavailable, render_docx, render_pdf
 
-    try:
-        data = render_pdf(letter.doc)
-    except RendererUnavailable as exc:
-        raise AppError("export_unavailable", 503, "PDF download isn't available on this server right now.") from exc
-    key = f"cases/{case.id}/letters/{letter.id}/v{letter.version}.pdf"
-    c.store.put(key, data, "application/pdf")
-    exp = LetterExport(
-        letter_id=letter.id, case_id=case.id, letter_version=letter.version, format="pdf", storage_key=key
-    )
+    if fmt == "docx":
+        data = render_docx(letter.doc)
+    else:
+        try:
+            data = render_pdf(letter.doc)
+        except RendererUnavailable as exc:
+            raise AppError("export_unavailable", 503, "PDF download isn't available on this server right now.") from exc
+    key = f"cases/{case.id}/letters/{letter.id}/v{letter.version}.{fmt}"
+    c.store.put(key, data, MIME[fmt])
+    exp = LetterExport(letter_id=letter.id, case_id=case.id, letter_version=letter.version, format=fmt, storage_key=key)
+    _audit_export(s, exp)
     s.add(exp)
     s.commit()
     return exp
