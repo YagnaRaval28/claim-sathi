@@ -31,6 +31,12 @@ export function useI18n() {
       for (const [k, val] of Object.entries(vars ?? {})) s = s.replaceAll(`{${k}}`, String(val));
       return s;
     };
-    return { lang: v.lang, t, href: (path: string) => `/${v.lang}${path}` };
+    /** Non-string message values (for example the sections of a content page). */
+    const raw = (key: string): unknown => {
+      let node: unknown = v.dict;
+      for (const part of key.split(".")) node = (node as Record<string, unknown> | undefined)?.[part];
+      return node;
+    };
+    return { lang: v.lang, t, raw, href: (path: string) => `/${v.lang}${path}` };
   }, [v]);
 }

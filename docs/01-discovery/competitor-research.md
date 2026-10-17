@@ -606,3 +606,4 @@ Accessed 13 October 2026 unless stated otherwise. Status labels as defined in Se
 | S61 | https://www.tribuneindia.com/news/business/epfo-cautions-members-against-taking-help-from-agents-for-online-services ; https://insights.dataful.in/articles/epfo-claim-rejection-rate-at-26-in-2023-24 | — | EPFO anti-agent stance; rejection rate | S |
 | S62 | https://join.consumer-voice.org/legal/ ; https://voxya.com/ | — | Consumer-complaint services | S |
 | S63 | https://arxiv.org/html/2507.04854v1 (Grahak-Nyay) | Jul 2025 | Research consumer-complaint chatbot | S |
+| S64 | https://policyholder.gov.in/web/guest/igms1 (IRDAI) | accessed 2026-10-17 | Bima Bharosa portal bimabharosa.irdai.gov.in; toll-free 155255 / 1800 4254 732; complaints@irdai.gov.in | V |

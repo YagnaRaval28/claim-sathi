@@ -14,7 +14,8 @@ export default function Home() {
       <p style={{ fontSize: 18 }}>{t("home.subtitle")}</p>
       <Link href={href(me ? "/cases" : "/sign-in")} className="btn btn-primary">
         {me ? t("common.myCases") : t("home.cta")} →
-      </Link>
+      </Link>{" "}
+      <Link href={href("/how-it-works")} className="btn btn-secondary">{t("footer.how")}</Link>
       <p className="muted">{t("home.free")}</p>
       <ol>
         <li>{t("home.point1")}</li>

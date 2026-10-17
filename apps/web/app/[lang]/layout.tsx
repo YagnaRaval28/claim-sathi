@@ -3,6 +3,7 @@ import { Noto_Sans, Noto_Sans_Devanagari, Noto_Sans_Gujarati, Noto_Serif } from 
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import "../globals.css";
+import { Footer } from "@/components/content-page";
 import { Header } from "@/components/header";
 import { I18nProvider } from "@/lib/i18n";
 import { isLang, LANGS } from "@/lib/langs";
@@ -42,6 +43,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
           <main id="main" tabIndex={-1}>
             {children}
           </main>
+          <Footer />
         </I18nProvider>
       </body>
     </html>
