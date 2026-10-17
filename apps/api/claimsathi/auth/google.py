@@ -33,6 +33,29 @@ COOKIE = "cs_oauth"
 LANGS = ("en", "gu", "hi")
 
 
+@dataclass(frozen=True)
+class OAuthClient:
+    """Consumer and admin sign-in use separate Google clients (system-design §8)."""
+
+    client_id: str
+    client_secret: str
+    callback_path: str
+
+
+def consumer_client(c: AppContext) -> OAuthClient:
+    s = c.settings
+    return OAuthClient(
+        s.google_oauth_client_id, s.google_oauth_client_secret.get_secret_value(), "/api/v1/auth/google/callback"
+    )
+
+
+def admin_client(c: AppContext) -> OAuthClient:
+    s = c.settings
+    return OAuthClient(
+        s.admin_oauth_client_id, s.admin_oauth_client_secret.get_secret_value(), "/api/v1/admin/auth/google/callback"
+    )
+
+
 class GoogleSignInError(Exception):
     """Any failure in the flow. The caller sends the user back to sign-in; details are never shown or logged."""
 
@@ -50,11 +73,11 @@ def _sign(c: AppContext, body: str) -> str:
     return hmac.new(key, f"oauth:{body}".encode(), hashlib.sha256).hexdigest()
 
 
-def redirect_uri(c: AppContext) -> str:
-    return f"{c.settings.public_base_url}/api/v1/auth/google/callback"
+def redirect_uri(c: AppContext, client: OAuthClient | None = None) -> str:
+    return f"{c.settings.public_base_url}{(client or consumer_client(c)).callback_path}"
 
 
-def start(c: AppContext, lang: str) -> tuple[str, str]:
+def start(c: AppContext, lang: str, client: OAuthClient | None = None) -> tuple[str, str]:
     """Returns (Google authorization URL, signed state cookie value)."""
     state, nonce, verifier = secrets.token_urlsafe(24), secrets.token_urlsafe(24), secrets.token_urlsafe(48)
     body = _b64(
@@ -68,9 +91,10 @@ def start(c: AppContext, lang: str) -> tuple[str, str]:
             }
         ).encode()
     )
+    client = client or consumer_client(c)
     params = {
-        "client_id": c.settings.google_oauth_client_id,
-        "redirect_uri": redirect_uri(c),
+        "client_id": client.client_id,
+        "redirect_uri": redirect_uri(c, client),
         "response_type": "code",
         "scope": "openid email",
         "state": state,
@@ -94,15 +118,16 @@ def read_state(c: AppContext, cookie: str | None, state: str | None) -> dict[str
     return data
 
 
-def exchange_code(c: AppContext, code: str, verifier: str) -> dict[str, Any]:
+def exchange_code(c: AppContext, code: str, verifier: str, client: OAuthClient | None = None) -> dict[str, Any]:
     """POST to Google's token endpoint (replaced in tests)."""
+    client = client or consumer_client(c)
     r = httpx.post(
         EXCHANGE_URL,
         data={
             "code": code,
-            "client_id": c.settings.google_oauth_client_id,
-            "client_secret": c.settings.google_oauth_client_secret.get_secret_value(),
-            "redirect_uri": redirect_uri(c),
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+            "redirect_uri": redirect_uri(c, client),
             "grant_type": "authorization_code",
             "code_verifier": verifier,
         },
@@ -120,12 +145,12 @@ class GoogleUser:
     email: str
 
 
-def verify_id_token(c: AppContext, id_token: str, nonce: str) -> GoogleUser:
+def verify_id_token(c: AppContext, id_token: str, nonce: str, client: OAuthClient | None = None) -> GoogleUser:
     try:
         claims: dict[str, Any] = json.loads(_unb64(id_token.split(".")[1]))
     except (IndexError, ValueError) as exc:
         raise GoogleSignInError("id_token") from exc
-    if claims.get("iss") not in ISSUERS or claims.get("aud") != c.settings.google_oauth_client_id:
+    if claims.get("iss") not in ISSUERS or claims.get("aud") != (client or consumer_client(c)).client_id:
         raise GoogleSignInError("id_token")
     if int(claims.get("exp", 0)) < time.time() or not hmac.compare_digest(str(claims.get("nonce")), nonce):
         raise GoogleSignInError("id_token")

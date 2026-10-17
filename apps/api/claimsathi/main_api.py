@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request, Response
 from claimsathi.ai.gateway import Provider
 from claimsathi.ai.providers import FakeProvider, GeminiDevProvider
 from claimsathi.analysis.service import make_analysis_handler
+from claimsathi.api.admin_routes import router as admin_router
 from claimsathi.api.datacontrol_routes import router as datacontrol_router
 from claimsathi.api.escalation_routes import router as escalation_router
 from claimsathi.api.routes import router
@@ -145,4 +146,5 @@ def create_app(context: AppContext | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(escalation_router)
     app.include_router(datacontrol_router)
+    app.include_router(admin_router)
     return app

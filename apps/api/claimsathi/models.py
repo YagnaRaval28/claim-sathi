@@ -89,14 +89,45 @@ class Session(Base):
     id: Mapped[uuid.UUID] = _pk()
     token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True, nullable=False)
     kind: Mapped[str] = mapped_column(String(8), nullable=False, server_default="user")
-    user_id: Mapped[uuid.UUID] = mapped_column(UUIDPK, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDPK, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    admin_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDPK, ForeignKey("admin_users.id", ondelete="CASCADE"), index=True
+    )
     trusted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     idle_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     absolute_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = _created()
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
-    __table_args__ = (CheckConstraint("kind IN ('user','admin')", name="kind"),)
+    __table_args__ = (
+        CheckConstraint("kind IN ('user','admin')", name="kind"),
+        CheckConstraint(
+            "(kind = 'user' AND user_id IS NOT NULL AND admin_user_id IS NULL) OR "
+            "(kind = 'admin' AND admin_user_id IS NOT NULL AND user_id IS NULL)",
+            name="owner",
+        ),
+    )
+
+
+class AdminUser(Base):
+    """Admin console accounts (PRD FR-037). Email kept as a keyed hash plus an encrypted copy, like users."""
+
+    __tablename__ = "admin_users"
+    id: Mapped[uuid.UUID] = _pk()
+    email_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True, nullable=False)
+    email_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True)
+    role: Mapped[str] = mapped_column(String(10), nullable=False)
+    totp_secret_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
+    totp_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failed_totp: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    first_failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    __table_args__ = (CheckConstraint("role IN ('admin','reviewer')", name="role"),)
 
 
 class ConsentVersion(Base):
@@ -479,7 +510,14 @@ class ReviewItem(Base):
     comment: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(String(2))
     status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="open")
+    decision_category: Mapped[str | None] = mapped_column(String(32))
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("admin_users.id", ondelete="SET NULL"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
+    __table_args__ = (
+        CheckConstraint("status IN ('open','correct','incorrect','kb_fix','skipped')", name="status"),
+        Index("ix_review_items_status_created", "status", "created_at"),
+    )
 
 
 class Outbox(Base):
@@ -684,4 +722,19 @@ class OAuthIdentity(Base):
     __table_args__ = (
         CheckConstraint("provider = 'google'", name="provider"),
         UniqueConstraint("provider", "subject", name="uq_oauth_identities_provider_subject"),
+    )
+
+
+class SupportGrant(Base):
+    """A user's 7-day grant letting a reviewer see one case (PRD FR-042)."""
+
+    __tablename__ = "support_grants"
+    id: Mapped[uuid.UUID] = _pk()
+    case_id: Mapped[uuid.UUID] = _case_fk()
+    granted_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("expires_at <= granted_at + interval '7 days'", name="max_seven_days"),
+        Index("ix_support_grants_active", "case_id", postgresql_where=text("revoked_at IS NULL")),
     )

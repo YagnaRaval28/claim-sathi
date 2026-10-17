@@ -267,9 +267,15 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--env", choices=["local", "test", "prod"], default="local")
     args = p.parse_args()
-    sf = make_session_factory(get_settings().database_url)
+    settings = get_settings()
+    sf = make_session_factory(settings.database_url)
     with sf() as s:
         seed(s, args.env)
+        if settings.admin_bootstrap_email:  # FR-037: the first admin on the allowlist
+            from claimsathi.admin.service import seed_bootstrap_admin
+            from claimsathi.main_api import build_context
+
+            seed_bootstrap_admin(build_context(settings), s)
     print(f"seeded ({args.env})")
 
 

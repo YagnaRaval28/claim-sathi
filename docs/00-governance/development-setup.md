@@ -97,6 +97,13 @@ Google sign-in stays hidden until a client is configured. Email codes always wor
 2. Put the values in `.env` as `GOOGLE_OAUTH_CLIENT_ID=…` and `GOOGLE_OAUTH_CLIENT_SECRET=…`. They are secrets: never commit them. The `<…>` placeholders from `.env.example` count as "not configured".
 3. Restart the API. The sign-in screen then shows **Continue with Google** first.
 
+## 3c. Admin console (optional)
+
+1. Create a second Google OAuth client, as in §3b, with the redirect URI `http://localhost:3000/api/v1/admin/auth/google/callback`.
+2. In `.env`, set `ADMIN_OAUTH_CLIENT_ID`, `ADMIN_OAUTH_CLIENT_SECRET` and `ADMIN_BOOTSTRAP_EMAIL` (your Google account's email).
+3. Run `uv run python -m claimsathi.seeds --env local` to put that email on the allowlist, then restart the API.
+4. Open `http://localhost:3000/en/admin/sign-in`. After Google, add the shown key to an authenticator app and enter its 6-digit code.
+
 ## 4. Environment variables
 
 1. Run `cp .env.example .env`. The `.env` file is git-ignored and must **never** be committed.

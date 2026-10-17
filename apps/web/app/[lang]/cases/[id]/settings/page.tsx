@@ -12,6 +12,38 @@ import { useI18n } from "@/lib/i18n";
 import { useRequireUser } from "@/lib/use-session";
 
 type CaseWithRetention = CaseSummary & { retention: { delete_after: string | null; extended: boolean } };
+type Grant = { active: boolean; expires_at: string | null };
+
+/** FR-042: the user decides whether a reviewer may see this case, for at most 7 days, and can revoke it. */
+function SupportAccess({ caseId }: { caseId: string }) {
+  const { t } = useI18n();
+  const [g, setG] = useState<Grant | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => { api<Grant>(`/cases/${caseId}/support-grant`).then(setG).catch(setError); }, [caseId]);
+  async function change(on: boolean) {
+    setError(null);
+    try {
+      if (on) setG(await api<Grant>(`/cases/${caseId}/support-grant`, { body: {} }));
+      else {
+        await api(`/cases/${caseId}/support-grant`, { method: "DELETE" });
+        setG({ active: false, expires_at: null });
+      }
+    } catch (e) { setError(e); }
+  }
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>{t("caseSettings.supportTitle")}</h2>
+      <p>{t("caseSettings.supportBody")}</p>
+      {g?.active && g.expires_at ? (
+        <p>{t("caseSettings.supportUntil", { date: formatDateDmy(g.expires_at.slice(0, 10)) })}{" "}
+          <button className="btn btn-secondary" onClick={() => change(false)}>{t("caseSettings.supportRevoke")}</button></p>
+      ) : (
+        <button className="btn btn-secondary" onClick={() => change(true)}>{t("caseSettings.supportGrant")}</button>
+      )}
+      <ProblemNote error={error} />
+    </section>
+  );
+}
 
 // CASE-12: download case data, retention, danger zone. (Nickname edit and support access come with FR-042.)
 export default function CaseSettings() {
@@ -58,6 +90,8 @@ export default function CaseSettings() {
           </>
         ) : <p>{t("caseSettings.retentionOpen")}</p>}
       </section>
+
+      <SupportAccess caseId={id} />
 
       <section className="danger-zone">
         <h2 style={{ marginTop: 0 }}>{t("caseSettings.danger")}</h2>

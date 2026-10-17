@@ -501,7 +501,12 @@
     "deleteCase": "Delete this case",
     "deleteCaseTitle": "Delete this case?",
     "deleteCaseBody": "This permanently deletes the case, its files, details, findings and letters. It can't be undone.",
-    "deleted": "The case was deleted."
+    "deleted": "The case was deleted.",
+    "supportTitle": "Reviewer access",
+    "supportBody": "Allow a ClaimSathi reviewer to see this case for 7 days, for example to check a problem you reported. You can revoke it at any time.",
+    "supportUntil": "A reviewer can see this case until {date}.",
+    "supportGrant": "Allow for 7 days",
+    "supportRevoke": "Revoke"
   },
   "close": {
     "title": "Close this case",

@@ -45,6 +45,7 @@ from claimsathi.models import (
     Outbox,
     Reminder,
     ReviewItem,
+    SupportGrant,
     User,
 )
 
@@ -413,6 +414,8 @@ def create_report(
         b = blocks[block_index]
         payload = {"letter_version": letter.version, "block_index": block_index, "block": b}
     payload["grant_access"] = grant_access
+    if grant_access:
+        grant_support_access(s, case)
     item = ReviewItem(
         source="user_report",
         case_id=case.id,
@@ -425,6 +428,37 @@ def create_report(
     )
     s.add(item)
     return item
+
+
+# --- Support access by user grant (FR-042) ---------------------------------------------------------
+
+SUPPORT_GRANT = timedelta(days=7)
+
+
+def active_grant(s: Session, case_id: uuid.UUID) -> SupportGrant | None:
+    return s.scalar(
+        select(SupportGrant)
+        .where(SupportGrant.case_id == case_id, SupportGrant.revoked_at.is_(None), SupportGrant.expires_at > now_utc())
+        .order_by(SupportGrant.expires_at.desc())
+        .limit(1)
+    )
+
+
+def grant_support_access(s: Session, case: Case) -> SupportGrant:
+    existing = active_grant(s, case.id)
+    if existing is not None:
+        return existing
+    now = now_utc()
+    g = SupportGrant(case_id=case.id, granted_at=now, expires_at=now + SUPPORT_GRANT)
+    s.add(g)
+    _audit(s, actor="user", actor_id=None, action="support_access_granted", entity="case", entity_id=str(case.id))
+    return g
+
+
+def revoke_support_access(s: Session, case: Case) -> None:
+    for g in s.scalars(select(SupportGrant).where(SupportGrant.case_id == case.id, SupportGrant.revoked_at.is_(None))):
+        g.revoked_at = now_utc()
+    _audit(s, actor="user", actor_id=None, action="support_access_revoked", entity="case", entity_id=str(case.id))
 
 
 # --- Email change (FR-036) -------------------------------------------------------------------------

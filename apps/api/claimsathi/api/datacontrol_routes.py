@@ -207,6 +207,29 @@ def post_report(
     return JSONResponse(out, status_code=201)
 
 
+# --- Support access (FR-042) -----------------------------------------------------------------------
+
+
+@router.get("/cases/{case_id}/support-grant")
+def get_support_grant(case: Case = Depends(owned_case), s: Session = Depends(db)) -> dict[str, Any]:
+    g = dc.active_grant(s, case.id)
+    return {"active": g is not None, "expires_at": g.expires_at.isoformat() if g else None}
+
+
+@router.post("/cases/{case_id}/support-grant")
+def post_support_grant(case: Case = Depends(owned_case), s: Session = Depends(db)) -> dict[str, Any]:
+    g = dc.grant_support_access(s, case)
+    s.commit()
+    return {"active": True, "expires_at": g.expires_at.isoformat()}
+
+
+@router.delete("/cases/{case_id}/support-grant", status_code=204)
+def delete_support_grant(case: Case = Depends(owned_case), s: Session = Depends(db)) -> Response:
+    dc.revoke_support_access(s, case)
+    s.commit()
+    return Response(status_code=204)
+
+
 # --- Settings (FR-036) -----------------------------------------------------------------------------
 
 

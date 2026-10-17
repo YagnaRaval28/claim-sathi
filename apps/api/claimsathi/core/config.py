@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # Google sign-in (FR-002). Empty, or a "<placeholder>" from .env.example, means "not configured".
     google_oauth_client_id: str = ""
     google_oauth_client_secret: SecretStr = SecretStr("")
+    # Admin console (FR-037): a separate Google client, an allowlist seeded from ADMIN_BOOTSTRAP_EMAIL, TOTP.
+    admin_oauth_client_id: str = ""
+    admin_oauth_client_secret: SecretStr = SecretStr("")
+    admin_bootstrap_email: str = ""
+    admin_cookie_name: str = "cs_admin"
 
     mailer: Literal["smtp", "ses", "memory"] = "smtp"
     smtp_host: str = "localhost"
@@ -105,7 +110,7 @@ class Settings(BaseSettings):
             raise ValueError("STORAGE_BACKEND=memory and MAILER=memory are only allowed locally and in tests")
         return self
 
-    @field_validator("google_oauth_client_id")
+    @field_validator("google_oauth_client_id", "admin_oauth_client_id", "admin_bootstrap_email")
     @classmethod
     def _unset_placeholder(cls, v: str) -> str:
         v = v.strip()
@@ -115,6 +120,11 @@ class Settings(BaseSettings):
     def google_enabled(self) -> bool:
         secret = self.google_oauth_client_secret.get_secret_value().strip()
         return bool(self.google_oauth_client_id) and bool(secret) and not secret.startswith("<")
+
+    @property
+    def admin_google_enabled(self) -> bool:
+        secret = self.admin_oauth_client_secret.get_secret_value().strip()
+        return bool(self.admin_oauth_client_id) and bool(secret) and not secret.startswith("<")
 
     @property
     def cookie_secure(self) -> bool:
