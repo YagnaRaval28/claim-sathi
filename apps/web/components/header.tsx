@@ -19,8 +19,12 @@ export function Header() {
   // Re-check on navigation: the header stays mounted across sign-in and sign-out.
   useEffect(() => {
     let alive = true;
-    api("/me")
-      .then(() => { if (alive) setSignedIn(true); })
+    api<{ large_text: boolean }>("/me")
+      .then((m) => {
+        if (!alive) return;
+        setSignedIn(true);
+        document.documentElement.dataset.largeText = String(m.large_text);  // FR-036: applies on every page
+      })
       .catch(() => { if (alive) setSignedIn(false); });
     return () => { alive = false; };
   }, [pathname]);
@@ -43,6 +47,7 @@ export function Header() {
         {signedIn && (
           <>
             <Link href={href("/cases")}>{t("common.myCases")}</Link>
+            <Link href={href("/settings")}>{t("common.settings")}</Link>
             <button type="button" className="btn btn-ghost" onClick={signOut}>{t("common.signOut")}</button>
           </>
         )}

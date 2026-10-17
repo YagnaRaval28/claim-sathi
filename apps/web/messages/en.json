@@ -13,7 +13,10 @@
     "language": "Language",
     "myCases": "My cases",
     "homeLabel": "ClaimSathi home",
-    "caseSteps": "Case steps"
+    "caseSteps": "Case steps",
+    "settings": "Settings",
+    "saved": "Saved",
+    "close": "Close"
   },
   "home": {
     "title": "Health claim cut or rejected?",
@@ -270,7 +273,9 @@
     "syntheticSource": "(SYNTHETIC test source)",
     "stale": "Your details changed after this letter was written. Update the findings, then come back.",
     "goFindings": "Go to findings",
-    "afterSending": "I've sent it: track deadlines"
+    "afterSending": "I've sent it: track deadlines",
+    "copyText": "Copy as email text",
+    "copied": "Copied"
   },
   "errors": {
     "network": "Couldn't reach ClaimSathi. Check your connection and try again.",
@@ -300,7 +305,10 @@
     "email_code_expired": "This code has expired. Send a new one.",
     "ai_paused_budget": "Automatic reading is paused for now. You can type your details in.",
     "case_closed": "This case is closed.",
-    "escalation_blocked": "You can't log this yet: the Ombudsman conditions are not met."
+    "escalation_blocked": "You can't log this yet: the Ombudsman conditions are not met.",
+    "confirmation_invalid": "The code doesn't match. Please type it again.",
+    "retention_already_extended": "You've already kept these files for longer once.",
+    "email_in_use": "That email address is already used by another account."
   },
   "track": {
     "title": "Track your case",
@@ -442,5 +450,117 @@
     "emailFailed": "Email failed",
     "markRead": "Mark as read",
     "open": "Open"
+  },
+  "confirm": {
+    "typeCode": "Type {code} to confirm",
+    "codeLabel": "Confirmation code",
+    "cancel": "Cancel"
+  },
+  "report": {
+    "link": "Something's wrong?",
+    "title": "What's wrong?",
+    "reasons": {
+      "wrong_fact": "A fact is wrong",
+      "wrong_rule": "The rule doesn't apply",
+      "bad_translation": "Bad translation",
+      "other": "Something else"
+    },
+    "comment": "Tell us more (optional)",
+    "grant": "Allow a reviewer to see this case for 7 days",
+    "send": "Send report",
+    "thanks": "Thanks, we'll review this.",
+    "reported": "Reported"
+  },
+  "caseSettings": {
+    "title": "Case settings",
+    "link": "Case settings",
+    "download": "Download case data",
+    "downloadAll": "Download all my data",
+    "preparing": "Preparing…",
+    "ready": "Your download is ready (valid for 24 hours).",
+    "downloadLink": "Download ZIP",
+    "exportFailed": "We couldn't prepare the download. Please try again.",
+    "retention": "Files",
+    "retentionOn": "Your uploaded files will be deleted on {date}.",
+    "retentionOpen": "Files are kept while the case is open.",
+    "retentionExtended": "You've extended this once.",
+    "extend": "Keep 90 more days",
+    "danger": "Danger zone",
+    "deleteCase": "Delete this case",
+    "deleteCaseTitle": "Delete this case?",
+    "deleteCaseBody": "This permanently deletes the case, its files, details, findings and letters. It can't be undone.",
+    "deleted": "The case was deleted."
+  },
+  "close": {
+    "title": "Close this case",
+    "optional": "All questions are optional.",
+    "outcome": "What happened?",
+    "outcomes": {
+      "paid_in_full": "Paid in full",
+      "partly_paid": "Partly paid",
+      "not_paid": "Not paid",
+      "withdrew": "I withdrew"
+    },
+    "amount": "Amount received in rupees",
+    "ombudsman": "Did the Ombudsman accept your complaint?",
+    "ombudsmanAnswers": {
+      "accepted": "Accepted",
+      "dismissed_not_admissible": "Dismissed as not admissible",
+      "dont_know": "Don't know"
+    },
+    "rating": "How much did ClaimSathi help? (1 = not at all, 5 = a lot)",
+    "comment": "Anything else? (optional)",
+    "submit": "Close case",
+    "skip": "Skip and close",
+    "done": "Case closed. Your files will be deleted on {date}. You can keep them longer once in Case settings."
+  },
+  "account": {
+    "title": "Account settings",
+    "language": "Language",
+    "email": "Email",
+    "currentEmail": "Current email: {email}",
+    "newEmail": "New email address",
+    "sendCode": "Send code",
+    "codeSent": "We sent a 6-digit code to the new address.",
+    "verify": "Change email",
+    "emailChanged": "Your email was changed.",
+    "reminders": "Email me deadline reminders",
+    "largeText": "Large text",
+    "signOutAll": "Sign out everywhere",
+    "signOutAllConfirm": "Sign out on every device, including this one?",
+    "consents": "Consent history",
+    "consentRow": "{date} · version {version} · {purposes}",
+    "withdrawn": "withdrawn {date}",
+    "purposes": {
+      "processing": "document processing",
+      "reminders": "reminders"
+    },
+    "deleteAccount": "Delete my account",
+    "deleteAccountTitle": "Delete your account?",
+    "deleteAccountBody": "This permanently deletes your account and all your cases. It can't be undone.",
+    "accountDeleted": "Your account was deleted."
+  },
+  "pack": {
+    "title": "Your Ombudsman complaint",
+    "create": "Create Ombudsman pack",
+    "notYet": "The pack isn't ready yet.",
+    "checks": "See the checks",
+    "letter": "Complaint letter",
+    "enclosures": "Enclosures",
+    "enclosure": {
+      "decision_letter": "The insurer's decision letter",
+      "s1_letter": "Your letter to the insurer's grievance officer",
+      "insurer_reply": "The insurer's reply",
+      "no_reply_statement": "A statement that the insurer did not reply (included in the letter)"
+    },
+    "addDocument": "Add it on the Documents page",
+    "howToFile": "How to file",
+    "free": "Filing with the Insurance Ombudsman is free. Never pay anyone who claims to be the Ombudsman.",
+    "online": "Online",
+    "onlineBody": "File on the Council for Insurance Ombudsmen website:",
+    "emailPost": "By email or post",
+    "emailPostBody": "Send the signed letter and enclosures to the Insurance Ombudsman office for your area. Find the office and its address on the same website.",
+    "logFiledTitle": "After you file",
+    "filedDone": "Logged. We'll show when a decision is usually expected."
   }
 }

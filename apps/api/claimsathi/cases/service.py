@@ -106,6 +106,11 @@ def case_summary(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
         },
         "extraction": extraction_state(s, case),
         "next_deadline": _next_deadline(s, case),
+        "retention": {
+            "delete_after": case.retention_delete_after.isoformat() if case.retention_delete_after else None,
+            "extended": case.retention_extended,
+        },
+        "outcome": case.outcome,
         "documents": [
             {
                 "id": str(d.id),

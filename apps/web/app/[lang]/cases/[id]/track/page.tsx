@@ -133,15 +133,6 @@ export default function Track() {
     } catch (err) { setError(err); }
   }
 
-  async function closeCase() {
-    if (!window.confirm(t("track.confirmClose"))) return;
-    setError(null);
-    try {
-      await api(`/cases/${id}/events`, { body: { kind: "closed", event_date: todayIst(), metadata: {} },
-        idempotencyKey: newKey() });
-      await load();
-    } catch (err) { setError(err); }
-  }
 
   if (!me) return gate;
   if (!e) return <div className="page"><ProblemNote error={error} />{!error && t("common.loading")}</div>;
@@ -270,9 +261,10 @@ export default function Track() {
 
       {!closed && (
         <div className="action-bar">
-          <button className="btn btn-ghost btn-block" onClick={closeCase}>{t("track.closeCase")}</button>
+          <Link className="btn btn-ghost btn-block" href={href(`/cases/${id}/close`)}>{t("track.closeCase")}</Link>
         </div>
       )}
+      <p><Link href={href(`/cases/${id}/settings`)}>{t("caseSettings.link")} →</Link></p>
       <Disclaimer />
     </div>
   );

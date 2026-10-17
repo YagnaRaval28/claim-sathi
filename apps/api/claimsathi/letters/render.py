@@ -15,6 +15,7 @@ body { font-family: "Noto Serif", "Noto Serif Gujarati", "Noto Serif Devanagari"
        line-height: 1.6; color: #1C2321; }
 .meta { margin: 0; }
 .subject { font-weight: 600; margin: 14pt 0; }
+h3 { font-size: 11.5pt; font-weight: 700; margin: 12pt 0 4pt; }
 blockquote { margin: 8pt 0 8pt 12pt; padding-left: 8pt; border-left: 2pt solid #1E6B40; }
 sup { font-size: 8pt; }
 ol, ul { padding-left: 16pt; list-style: none; }
@@ -31,6 +32,8 @@ def letter_html(doc: dict[str, Any]) -> str:
             parts.append(f'<p class="meta">{escape(b["text"])}</p>')
         elif t == "subject":
             parts.append(f'<p class="subject">{escape(b["text"])}</p>')
+        elif t == "heading":
+            parts.append(f"<h3>{escape(b['text'])}</h3>")
         elif t == "quote":
             parts.append(f'<blockquote lang="en">{escape(b["text"])}<sup>[{int(b["footnote"])}]</sup></blockquote>')
         elif t == "list":

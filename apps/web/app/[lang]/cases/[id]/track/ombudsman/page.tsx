@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, newKey } from "@/lib/api";
 import type { CheckResult, Escalation } from "@/lib/escalation";
 import { formatDateDmy } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
@@ -25,6 +25,17 @@ export default function OmbudsmanChecks() {
   const { me, gate } = useRequireUser();
   const [e, setE] = useState<Escalation | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [creating, setCreating] = useState(false);
+  const router = useRouter();
+
+  async function createPack() {
+    setCreating(true);
+    setError(null);
+    try {
+      await api(`/cases/${id}/packs/ombudsman`, { body: {}, idempotencyKey: newKey() });
+      router.push(href(`/cases/${id}/track/ombudsman/pack`));
+    } catch (err) { setError(err); setCreating(false); }
+  }
 
   const load = useCallback(() => api<Escalation>(`/cases/${id}/escalation`).then(setE).catch(setError), [id]);
   useEffect(() => { if (me) void load(); }, [me, load]);
@@ -76,7 +87,9 @@ export default function OmbudsmanChecks() {
           {allAcked ? (
             <>
               <Callout tone="success">{t("ombudsman.ready")}</Callout>
-              <Link className="btn btn-primary btn-block" href={href(`/cases/${id}/track`)}>{t("ombudsman.logFiled")}</Link>
+              <button className="btn btn-primary btn-block" disabled={creating} aria-busy={creating} onClick={createPack}>
+                {t("pack.create")}
+              </button>
             </>
           ) : <p className="muted">{t("ombudsman.needAck")}</p>}
         </div>

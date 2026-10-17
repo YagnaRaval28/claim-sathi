@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ReportLink } from "@/components/dialogs";
 import { AuditBadge, Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote, ProvenanceTag } from "@/components/ui";
 import { api, ApiError, newKey } from "@/lib/api";
 import { formatInr } from "@/lib/format";
@@ -61,13 +62,16 @@ function SourceSheet({ caseId, citation, onClose }: { caseId: string; citation: 
   );
 }
 
-function Points({ ids, points, onOpen }: { ids: string[]; points: Map<string, Point>; onOpen: (c: Citation) => void }) {
+function Points({ ids, points, onOpen, caseId }: {
+  ids: string[]; points: Map<string, Point>; onOpen: (c: Citation) => void; caseId: string;
+}) {
   const { t } = useI18n();
   return (
     <>
       {ids.map((pid) => points.get(pid)).filter((p): p is Point => !!p).map((p) => (
         <div key={p.id} style={{ marginTop: 12 }}>
           <p>{p.statement} <ProvenanceTag kind={p.provenance} /></p>
+          <ReportLink caseId={caseId} targetType="counter_point" targetId={p.id} />
           {p.citations.map((c, i) => (
             <p key={c.id} className="quote" lang="en">
               “{c.quote}”
@@ -197,7 +201,7 @@ export default function Findings() {
             <div className="card" key={r.id}>
               <p className="quote">“{r.text}”</p>
               <AuditBadge status={r.audit_status ?? "PENDING"} />
-              <Points ids={r.counter_point_ids} points={points} onOpen={setOpen} />
+              <Points ids={r.counter_point_ids} points={points} onOpen={setOpen} caseId={id} />
             </div>
           ))}
           {a.line_items.length > 0 && a.reasons.length > 0 && <h2>{t("details.deductions")}</h2>}
@@ -209,7 +213,7 @@ export default function Findings() {
               </div>
               <AuditBadge status={l.audit_status ?? "PENDING"} />
               {l.audit_status === "CANNOT_ASSESS" && <p className="muted">{t("findings.cannotAssessHelp")}</p>}
-              <Points ids={l.counter_point_ids} points={points} onOpen={setOpen} />
+              <Points ids={l.counter_point_ids} points={points} onOpen={setOpen} caseId={id} />
             </div>
           ))}
           {a.dropped_count > 0 && <p className="muted">{t("findings.dropped")}</p>}

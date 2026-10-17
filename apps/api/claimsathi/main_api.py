@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request, Response
 from claimsathi.ai.gateway import Provider
 from claimsathi.ai.providers import FakeProvider, GeminiDevProvider
 from claimsathi.analysis.service import make_analysis_handler
+from claimsathi.api.datacontrol_routes import router as datacontrol_router
 from claimsathi.api.escalation_routes import router as escalation_router
 from claimsathi.api.routes import router
 from claimsathi.context import AppContext
@@ -20,6 +21,7 @@ from claimsathi.core.config import Settings, get_settings
 from claimsathi.core.db import make_session_factory
 from claimsathi.core.errors import install_error_handlers
 from claimsathi.core.logging import configure_logging, get_logger
+from claimsathi.datacontrols.service import make_export_handler, run_retention
 from claimsathi.documents.service import make_read_handler
 from claimsathi.escalation.service import send_due_reminders
 from claimsathi.extraction.service import make_extract_handler
@@ -79,6 +81,7 @@ def reminder_ticker(c: AppContext, stop: threading.Event, interval_s: float = 60
     while not stop.wait(interval_s):
         try:
             send_due_reminders(c)
+            run_retention(c)
         except Exception as exc:  # keep ticking; the class name only
             log.error("reminder_tick_failed", error_code=type(exc).__name__)
 
@@ -92,6 +95,7 @@ def create_app(context: AppContext | None = None) -> FastAPI:
     make_read_handler(c)
     make_extract_handler(c)
     make_analysis_handler()
+    make_export_handler(c)
 
     stop = threading.Event()
 
@@ -140,4 +144,5 @@ def create_app(context: AppContext | None = None) -> FastAPI:
 
     app.include_router(router)
     app.include_router(escalation_router)
+    app.include_router(datacontrol_router)
     return app

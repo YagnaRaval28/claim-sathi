@@ -73,6 +73,9 @@ class EmailChallenge(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # change_email only: the signed-in user and the new address (encrypted), set when the code is sent
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("users.id", ondelete="CASCADE"))
+    new_email_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     created_at: Mapped[datetime] = _created()
     __table_args__ = (
         CheckConstraint("attempts <= 5", name="attempts_max"),
@@ -447,8 +450,11 @@ class ReviewItem(Base):
     source: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("cases.id", ondelete="CASCADE"), index=True)
     target_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    target_id: Mapped[uuid.UUID | None] = mapped_column(UUIDPK)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     reason: Mapped[str] = mapped_column(String(48), nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text)
+    language: Mapped[str | None] = mapped_column(String(2))
     status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="open")
     created_at: Mapped[datetime] = _created()
 
@@ -605,3 +611,25 @@ class RuleAcknowledgement(Base):
     rule_key: Mapped[str] = mapped_column(String(48), primary_key=True)
     rule_version: Mapped[int] = mapped_column(Integer, primary_key=True)
     acknowledged_at: Mapped[datetime] = _created()
+
+
+# --- Data controls (PRD FR-030) ------------------------------------------------------------------------
+
+
+class DataExport(Base):
+    __tablename__ = "data_exports"
+    id: Mapped[uuid.UUID] = _pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDPK, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    case_id: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("cases.id", ondelete="CASCADE"))
+    scope: Mapped[str] = mapped_column(String(8), nullable=False)
+    status: Mapped[str] = mapped_column(String(8), nullable=False, server_default="queued")
+    storage_key: Mapped[str | None] = mapped_column(String(300))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    __table_args__ = (
+        CheckConstraint("scope IN ('case','account')", name="scope"),
+        CheckConstraint("status IN ('queued','ready','failed','expired')", name="status"),
+        CheckConstraint("scope = 'account' OR case_id IS NOT NULL", name="case_scope_has_case"),
+    )

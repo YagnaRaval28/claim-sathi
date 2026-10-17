@@ -168,6 +168,20 @@ h3 { font-size: 18px; font-weight: 600; margin: 0 0 var(--space-2); }
   padding: var(--space-6) var(--space-4); }
 @media (min-width: 960px) { .sheet { left: auto; top: 0; width: 400px; max-height: none; border-radius: 0; } }
 
+/* Dialogs (design §6: ConfirmDialog, TypedConfirmDialog, ReportDialog) */
+.dialog { position: fixed; z-index: 401; background: var(--color-surface); box-shadow: var(--elevation-3);
+  left: 0; right: 0; bottom: 0; max-height: 90vh; overflow: auto; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: var(--space-6) var(--space-4); }
+@media (min-width: 600px) { .dialog { left: 50%; right: auto; top: 50%; bottom: auto; width: min(520px, 92vw);
+  transform: translate(-50%, -50%); border-radius: var(--radius-lg); } }
+.btn-danger { background: var(--color-error); color: var(--color-on-primary); border-color: var(--color-error); }
+.btn-danger:disabled { opacity: 0.6; }
+.danger-zone { border: 1px solid var(--color-error); border-radius: var(--radius-md); padding: var(--space-4); }
+
+/* Large-text mode (FR-036) */
+html[data-large-text="true"] { font-size: 112.5%; }
+html[data-large-text="true"] body { font-size: 1.125rem; }
+
 .paper { background: var(--color-surface); border: 1px solid var(--color-border); max-width: var(--width-letter);
   padding: var(--space-8) var(--space-4); font-family: var(--font-noto-serif), serif; line-height: 1.6; }
 @media (min-width: 600px) { .paper { padding: var(--space-12); } }

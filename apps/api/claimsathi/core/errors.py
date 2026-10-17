@@ -40,6 +40,10 @@ TITLES: dict[str, str] = {
     "export_unavailable": "PDF export unavailable",
     "case_closed": "Case closed",
     "escalation_blocked": "Ombudsman conditions not met",
+    "confirmation_invalid": "Confirmation code mismatch",
+    "retention_already_extended": "Already extended",
+    "email_in_use": "Email already in use",
+    "warnings_not_acknowledged": "Warnings not acknowledged",
     "internal_error": "Something went wrong",
 }
 

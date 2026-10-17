@@ -193,6 +193,13 @@ def consents(body: ConsentIn, user: User = Depends(current_user), s: Session = D
     if body.version != current_consent_version(s).version:
         raise AppError("consent_required", 403, "The privacy notice has changed. Please review it again.")
     row = give_consent(s, user, version=body.version, purposes=list(body.purposes), language=user.display_language)
+    # the reminders choice takes effect immediately (FR-036): replan email reminders on open cases
+    from claimsathi.escalation.service import recompute
+
+    open_cases = select(Case).where(Case.user_id == user.id, Case.status == "open", Case.deleted_at.is_(None))
+    for case in s.scalars(open_cases):
+        recompute(s, case)
+    s.commit()
     return {"version": row.version, "purposes": row.purposes}
 
 
@@ -430,6 +437,32 @@ def post_letter(
 @router.get("/letters/{letter_id}")
 def get_letter(letter_id: uuid.UUID, user: User = Depends(current_user), s: Session = Depends(db)) -> dict[str, Any]:
     letter, case = owned_letter(s, letter_id, user.id)
+    return letter_view(s, letter, case)
+
+
+class LetterBlockIn(_In):
+    type: Literal["meta", "subject", "para", "heading", "list", "quote", "signature"]
+    text: str | None = Field(default=None, max_length=4000)
+    items: list[str] | None = Field(default=None, max_length=20)
+    citation_id: str | None = Field(default=None, max_length=64)
+    footnote: int | None = None
+    quote: str | None = Field(default=None, max_length=2000)
+    edited: bool | None = None
+
+
+class LetterEditIn(_In):
+    base_version: int
+    blocks: list[LetterBlockIn] = Field(min_length=1, max_length=80)
+
+
+@router.patch("/letters/{letter_id}")
+def patch_letter(
+    letter_id: uuid.UUID, body: LetterEditIn, user: User = Depends(current_user), s: Session = Depends(db)
+) -> dict[str, Any]:
+    from claimsathi.letters.service import edit_letter
+
+    letter, case = owned_letter(s, letter_id, user.id)
+    edit_letter(s, letter, case, body.base_version, [b.model_dump(exclude_none=True) for b in body.blocks])
     return letter_view(s, letter, case)
 
 

@@ -29,11 +29,11 @@ async function csrfToken(): Promise<string> {
   return ((await r.json()) as { csrf_token: string }).csrf_token;
 }
 
-type Opts = { method?: string; body?: unknown; form?: FormData; idempotencyKey?: string };
+type Opts = { method?: string; body?: unknown; form?: FormData; idempotencyKey?: string; headers?: Record<string, string> };
 
 export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
   const method = opts.method ?? (opts.body !== undefined || opts.form ? "POST" : "GET");
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(opts.headers ?? {}) };
   if (method !== "GET") headers["X-CSRF-Token"] = await csrfToken();
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
   let body: BodyInit | undefined;

@@ -125,6 +125,9 @@ def recompute(s: Session, case: Case) -> None:
     elif status == "open":
         case.closed_at = None
     case.status = status
+    from claimsathi.datacontrols.service import on_status_change
+
+    on_status_change(case)
     p = params(s)
     rules = enabled_rules(s)
     deadline_rule = s.scalar(select(Rule).where(Rule.rule_key == "RULE-DEADLINES", Rule.status == "enabled"))
@@ -328,6 +331,63 @@ def acknowledge(s: Session, case: Case, rule_keys: list[str]) -> None:
             s.add(RuleAcknowledgement(case_id=case.id, rule_key=key, rule_version=version))
 
 
+# --- Ombudsman pack (FR-026) ----------------------------------------------------------------------
+
+CIO_PORTAL = "https://cioins.co.in"  # Council for Insurance Ombudsmen (research source S50)
+
+
+def pack_guard(c: AppContext, s: Session, case: Case) -> None:
+    """Re-validated server-side on every pack request: no Block rule failing, every warning acknowledged."""
+    view = escalation_view(c, s, case)
+    if view["blocked"]:
+        raise AppError(
+            "escalation_blocked",
+            409,
+            "The Ombudsman conditions are not met yet.",
+            extra={
+                "rule_keys": [
+                    x["rule_key"] for x in view["ombudsman_checks"] if x["result"] in ("block", "unavailable")
+                ]
+            },
+        )
+    pending = [x["rule_key"] for x in view["ombudsman_checks"] if x["result"] == "warn" and not x["acknowledged"]]
+    if pending:
+        raise AppError(
+            "warnings_not_acknowledged", 409, "Please read and tick each warning.", extra={"rule_keys": pending}
+        )
+
+
+def pack_view(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
+    from claimsathi.letters.service import letter_view
+    from claimsathi.models import Document, Letter
+
+    letter = s.scalar(
+        select(Letter)
+        .where(Letter.case_id == case.id, Letter.stage == "S3")
+        .order_by(Letter.created_at.desc())
+        .limit(1)
+    )
+    events = event_rows(s, case)
+    docs = s.scalars(select(Document).where(Document.case_id == case.id)).all()
+    reply = next((e for e in reversed(events) if e.kind == "insurer_reply"), None)
+    has_s1_letter = s.scalar(select(Letter.id).where(Letter.case_id == case.id, Letter.stage == "S1").limit(1))
+    facts = case_facts(c, s, case)
+    return {
+        "letter": letter_view(s, letter, case) if letter else None,
+        "signatory": {"name": facts.complainant_name, "is_helper": facts.relation != "self"},
+        "enclosures": [
+            {"key": "decision_letter", "present": any(d.type == "decision_letter" for d in docs)},
+            {"key": "s1_letter", "present": has_s1_letter is not None},
+            {
+                "key": "insurer_reply" if reply else "no_reply_statement",
+                "present": bool(reply and (reply.document_id or any(d.type == "insurer_correspondence" for d in docs)))
+                or reply is None,
+            },
+        ],
+        "filing": {"portal_url": CIO_PORTAL, "free": True},
+    }
+
+
 # --- Notifications (in-app reminders) --------------------------------------------------------------
 
 
@@ -390,6 +450,7 @@ REMINDER_EMAIL = {
         "eligibility_open": "You can now go to the Insurance Ombudsman.",
         "insurer_reply_check": "Did your insurer reply? Log it in ClaimSathi.",
         "limitation": "{days} days left to go to the Insurance Ombudsman.",
+        "retention_notice": "This case has had no activity for 18 months. Open it within 30 days to keep it.",
     },
     "gu": {
         "subject": "ClaimSathi: {action}",
@@ -398,6 +459,7 @@ REMINDER_EMAIL = {
         "eligibility_open": "હવે તમે ઇન્શ્યોરન્સ ઓમ્બુડ્સમેન પાસે જઈ શકો છો.",
         "insurer_reply_check": "શું તમારી વીમા કંપનીએ જવાબ આપ્યો? તેની ClaimSathiમાં નોંધ કરો.",
         "limitation": "ઇન્શ્યોરન્સ ઓમ્બુડ્સમેન પાસે જવા માટે {days} દિવસ બાકી છે.",
+        "retention_notice": "આ કેસમાં 18 મહિનાથી કોઈ પ્રવૃત્તિ નથી. તેને રાખવા માટે 30 દિવસમાં ખોલો.",
     },
     "hi": {
         "subject": "ClaimSathi: {action}",
@@ -406,6 +468,7 @@ REMINDER_EMAIL = {
         "eligibility_open": "अब आप इंश्योरेंस ओम्बड्समैन के पास जा सकते हैं।",
         "insurer_reply_check": "क्या आपकी बीमा कंपनी ने जवाब दिया? इसे ClaimSathi में दर्ज करें।",
         "limitation": "इंश्योरेंस ओम्बड्समैन के पास जाने के लिए {days} दिन बाकी हैं।",
+        "retention_notice": "इस केस में 18 महीनों से कोई गतिविधि नहीं हुई है। इसे रखने के लिए 30 दिनों के अंदर खोलें।",
     },
 }
 

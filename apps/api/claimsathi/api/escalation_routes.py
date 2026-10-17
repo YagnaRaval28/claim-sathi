@@ -134,6 +134,41 @@ def acknowledge(body: AckIn, case: Case = Depends(owned_case), s: Session = Depe
     return Response(status_code=204)
 
 
+class PackIn(_In):
+    language: Literal["en"] = "en"
+
+
+@router.get("/cases/{case_id}/packs/ombudsman")
+def get_pack(
+    case: Case = Depends(owned_case), s: Session = Depends(db), c: AppContext = Depends(ctx)
+) -> dict[str, Any]:
+    return esc_svc.pack_view(c, s, case)
+
+
+@router.post("/cases/{case_id}/packs/ombudsman", status_code=202)
+def post_pack(
+    body: PackIn,
+    case: Case = Depends(owned_case),
+    user: User = Depends(consented_user),
+    s: Session = Depends(db),
+    c: AppContext = Depends(ctx),
+    idem: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> JSONResponse:
+    """FR-026 AC1: generation is impossible while any Block rule fails (checked here, not only in the UI)."""
+    from claimsathi.letters.service import create_ombudsman_letter
+
+    payload = {"case": str(case.id), "op": "ombudsman_pack", **body.model_dump()}
+    replay = idempotent_replay(s, user.id, idem, payload)
+    if replay:
+        return JSONResponse(replay[1], status_code=replay[0])
+    esc_svc.pack_guard(c, s, case)
+    letter = create_ombudsman_letter(c, s, case)
+    out = {"letter_id": str(letter.id)}
+    idempotent_store(s, user.id, idem or "", payload, 202, out)
+    s.commit()
+    return JSONResponse(out, status_code=202)
+
+
 ICS_ACTIONS = {
     "insurer_response_expected": "Check if your insurer replied",
     "ombudsman_eligible_from": "You can go to the Insurance Ombudsman from today",

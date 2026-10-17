@@ -7,7 +7,7 @@ import { api, ApiError } from "./api";
 import { useI18n } from "./i18n";
 
 export type Me = { id: string; display_language: string; email_masked: string; onboarded: boolean;
-  consent: { version: string; current: boolean } };
+  large_text: boolean; consent: { version: string; current: boolean } };
 
 /** Signed-in user or null; never redirects (header, home page). `undefined` while loading. */
 export function useMe(): Me | null | undefined {
