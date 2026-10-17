@@ -668,3 +668,20 @@ class ChecklistItem(Base):
     document_id: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("documents.id", ondelete="SET NULL"))
     updated_at: Mapped[datetime] = _created()
     __table_args__ = (CheckConstraint("status IN ('pending','obtained','uploaded')", name="status"),)
+
+
+class OAuthIdentity(Base):
+    """Google sign-in identities (PRD FR-002, system-design §4.2). One user may have both Google and email code."""
+
+    __tablename__ = "oauth_identities"
+    id: Mapped[uuid.UUID] = _pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDPK, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = _created()
+    __table_args__ = (
+        CheckConstraint("provider = 'google'", name="provider"),
+        UniqueConstraint("provider", "subject", name="uq_oauth_identities_provider_subject"),
+    )

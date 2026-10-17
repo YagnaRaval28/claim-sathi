@@ -7,7 +7,7 @@ import uuid
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, Request, Response, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -112,6 +112,76 @@ def email_verify(
     if res.user.onboarded_at is None:
         nxt = "onboarding_language"
     return {"user": me_view(c, s, res.user), "next": nxt}
+
+
+@router.get("/auth/providers")
+def auth_providers(c: AppContext = Depends(ctx)) -> dict[str, bool]:
+    return {"google": c.settings.google_enabled, "email": True}
+
+
+@router.get("/auth/google/start")
+def google_start(lang: Lang = "en", c: AppContext = Depends(ctx)) -> Response:
+    from claimsathi.auth import google
+
+    if not c.settings.google_enabled:
+        raise not_found()
+    url, cookie = google.start(c, lang)
+    resp = RedirectResponse(url, status_code=302)
+    resp.set_cookie(
+        google.COOKIE,
+        cookie,
+        max_age=google.STATE_TTL_S,
+        httponly=True,
+        secure=c.settings.cookie_secure,
+        samesite="lax",
+        path="/api/v1/auth/google",
+    )
+    return resp
+
+
+@router.get("/auth/google/callback")
+def google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    c: AppContext = Depends(ctx),
+    s: Session = Depends(db),
+) -> Response:
+    """FR-002: a cancelled or failed Google sign-in goes back to the sign-in page with no error state (AC2)."""
+    from claimsathi.auth import google
+
+    if not c.settings.google_enabled:
+        raise not_found()
+    cookie = request.cookies.get(google.COOKIE)
+    lang = "en"
+    try:
+        data = google.read_state(c, cookie, state)
+        lang = data["l"]
+        if error or not code:
+            raise google.GoogleSignInError("cancelled")
+        tokens = google.exchange_code(c, code, data["v"])
+        g_user = google.verify_id_token(c, str(tokens.get("id_token", "")), data["n"])
+        user, token, _new = google.sign_in(c, s, g_user)
+    except google.GoogleSignInError:
+        resp = RedirectResponse(f"/{lang}/sign-in", status_code=302)
+        resp.delete_cookie(google.COOKIE, path="/api/v1/auth/google")
+        return resp
+    if user.onboarded_at is None or not has_processing_consent(s, user.id):
+        target = f"/{lang}/welcome/consent"
+    else:
+        target = f"/{lang}/cases"
+    resp = RedirectResponse(target, status_code=302)
+    resp.delete_cookie(google.COOKIE, path="/api/v1/auth/google")
+    resp.set_cookie(
+        c.settings.session_cookie_name,
+        token,
+        httponly=True,
+        secure=c.settings.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+    return resp
 
 
 @router.post("/auth/logout", status_code=204)

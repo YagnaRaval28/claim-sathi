@@ -251,6 +251,7 @@ The product owner authorised development and approved the recommended answers in
 - **Local and test knowledge are SYNTHETIC fixtures** (`eval/fixtures/knowledge`). RULE-MC-01 in prod stays `disabled_pending_verification` until the official IRDAI PDF is ingested and its quote verified.
 - **In VS-1 a found clause is shown as "Couldn't assess yet", never "appears valid".** No AI counter-point analysis has run yet (it arrives in M5).
 - **Local development without Docker** uses a native PostgreSQL (`infra/local/native-postgres-setup.sql`), because the Docker Desktop engine would not start on the developer machine. See development-setup §3a.
+- **Google sign-in uses a small in-house OIDC client on `httpx` instead of Authlib.** The flow is the authorization code with PKCE, with state and nonce in a signed 10-minute cookie. `httpx` is already a dependency. Because the ID token comes straight from Google's token endpoint over TLS, the code checks its issuer, audience, expiry, nonce and `email_verified` but not its signature (OIDC Core §3.1.3.7). This keeps the dependency set small. system-design §1.1 and §3.3 still name Authlib; update them if this choice is accepted.
 - **Database sessions use SQLAlchemy's default `autoflush=True`.** With autoflush off, rows added in the same transaction were invisible to later queries. That caused duplicate `job_steps` rows and an unset `insurer_name`, both found by the integration suite.
 
 ### 9.1 Open items found during the build (need a decision or follow-up)

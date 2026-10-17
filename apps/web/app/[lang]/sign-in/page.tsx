@@ -15,6 +15,10 @@ export default function SignIn() {
   const [error, setError] = useState<unknown>(null);
   const me = useMe();
   useEffect(() => { if (me) router.replace(href("/cases")); }, [me, router, href]);
+  const [google, setGoogle] = useState(false);
+  useEffect(() => {
+    api<{ google: boolean }>("/auth/providers").then((p) => setGoogle(p.google)).catch(() => setGoogle(false));
+  }, []);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -39,6 +43,13 @@ export default function SignIn() {
   return (
     <div className="page reading">
       <PageTitle>{t("signIn.title")}</PageTitle>
+      {google && (
+        <>
+          {/* AUTH-01: Google first. A full-page navigation, so the API can redirect to Google and back. */}
+          <a className="btn btn-primary btn-block" href={`/api/v1/auth/google/start?lang=${lang}`}>{t("signIn.google")}</a>
+          <p className="muted" style={{ textAlign: "center" }}>{t("signIn.orEmail")}</p>
+        </>
+      )}
       <form onSubmit={submit} noValidate>
         <div className="field">
           <label htmlFor="email">{t("signIn.emailLabel")}</label>

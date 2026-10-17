@@ -100,12 +100,26 @@ def verify_code(c: AppContext, s: Session, *, email: str, code: str, trusted: bo
         s.commit()
         raise AppError("email_code_invalid", 401, "That code isn't right.", extra={"attempts_left": left})
     ch.consumed_at = now
+    user, is_new = user_for_verified_email(c, s, email)
+    token = new_session(s, user, trusted=trusted)
+    s.commit()
+    return SignInResult(user=user, session_token=token, is_new=is_new)
+
+
+def user_for_verified_email(c: AppContext, s: Session, email: str) -> tuple[User, bool]:
+    """Account linking (system-design §3.3 step 7): one user per verified email, whichever way they sign in."""
+    eh = email_hash(c, email)
     user = s.scalar(select(User).where(User.email_hash == eh))
-    is_new = user is None
-    if user is None:
-        user = User(email_hash=eh, email_enc=c.cipher.encrypt(normalize_email(email)), email_verified_at=now)
-        s.add(user)
-        s.flush()
+    if user is not None:
+        return user, False
+    user = User(email_hash=eh, email_enc=c.cipher.encrypt(normalize_email(email)), email_verified_at=now_utc())
+    s.add(user)
+    s.flush()
+    return user, True
+
+
+def new_session(s: Session, user: User, *, trusted: bool) -> str:
+    now = now_utc()
     token = new_token()
     s.add(
         DbSession(
@@ -116,8 +130,7 @@ def verify_code(c: AppContext, s: Session, *, email: str, code: str, trusted: bo
             absolute_expires_at=now + ABSOLUTE,
         )
     )
-    s.commit()
-    return SignInResult(user=user, session_token=token, is_new=is_new)
+    return token
 
 
 def revoke_session(s: Session, session_id: uuid.UUID) -> None:

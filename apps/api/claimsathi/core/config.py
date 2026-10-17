@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     session_cookie_name: str = "cs_session"
     csrf_cookie_name: str = "cs_csrf"
 
+    # Google sign-in (FR-002). Empty, or a "<placeholder>" from .env.example, means "not configured".
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: SecretStr = SecretStr("")
+
     mailer: Literal["smtp", "ses", "memory"] = "smtp"
     smtp_host: str = "localhost"
     smtp_port: int = 1025
@@ -100,6 +104,17 @@ class Settings(BaseSettings):
         if self.app_env in ("staging", "prod") and "memory" in (self.storage_backend, self.mailer):
             raise ValueError("STORAGE_BACKEND=memory and MAILER=memory are only allowed locally and in tests")
         return self
+
+    @field_validator("google_oauth_client_id")
+    @classmethod
+    def _unset_placeholder(cls, v: str) -> str:
+        v = v.strip()
+        return "" if v.startswith("<") else v
+
+    @property
+    def google_enabled(self) -> bool:
+        secret = self.google_oauth_client_secret.get_secret_value().strip()
+        return bool(self.google_oauth_client_id) and bool(secret) and not secret.startswith("<")
 
     @property
     def cookie_secure(self) -> bool:

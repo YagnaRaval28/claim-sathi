@@ -86,6 +86,17 @@ Compose maps Postgres to host port **5433** so it can run next to a native Postg
 
 ---
 
+## 3b. Google sign-in (optional, free)
+
+Google sign-in stays hidden until a client is configured. Email codes always work.
+
+1. Go to Google Cloud Console → APIs & Services → Credentials → **Create credentials → OAuth client ID**.
+   - Application type: **Web application**.
+   - Authorised redirect URI: `http://localhost:3000/api/v1/auth/google/callback`. In the cloud, use `{PUBLIC_BASE_URL}/api/v1/auth/google/callback`.
+   - OAuth consent screen: scopes `openid` and `email` only.
+2. Put the values in `.env` as `GOOGLE_OAUTH_CLIENT_ID=…` and `GOOGLE_OAUTH_CLIENT_SECRET=…`. They are secrets: never commit them. The `<…>` placeholders from `.env.example` count as "not configured".
+3. Restart the API. The sign-in screen then shows **Continue with Google** first.
+
 ## 4. Environment variables
 
 1. Run `cp .env.example .env`. The `.env` file is git-ignored and must **never** be committed.

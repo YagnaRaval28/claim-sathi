@@ -44,7 +44,9 @@
     "expired": "This code has expired. Send a new one.",
     "rateLimited": "Too many attempts. Please wait and try again.",
     "failed": "Couldn't send the code. Please try again.",
-    "consentNote": "We'll ask your permission before reading any documents."
+    "consentNote": "We'll ask your permission before reading any documents.",
+    "google": "Continue with Google",
+    "orEmail": "or sign in with an email code"
   },
   "language": {
     "title": "Choose your language"
