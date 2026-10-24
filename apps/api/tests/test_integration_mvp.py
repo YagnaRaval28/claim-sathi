@@ -153,7 +153,7 @@ def test_missing_pdf_renderer_returns_a_clear_problem(
 ) -> None:
     import claimsathi.letters.render as render
 
-    def unavailable(_doc: dict[str, Any]) -> bytes:
+    def unavailable(_doc: dict[str, Any], *_args: str) -> bytes:
         raise render.RendererUnavailable("OSError")
 
     monkeypatch.setattr(render, "render_pdf", unavailable)

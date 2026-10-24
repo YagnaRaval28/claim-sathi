@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -27,7 +27,7 @@ from claimsathi.auth import service as auth
 from claimsathi.cases.service import CaseCreate, case_summary, create_case, give_consent, progress
 from claimsathi.context import AppContext
 from claimsathi.core.errors import AppError, not_found
-from claimsathi.documents.service import upload
+from claimsathi.documents.service import unlock_pdf, upload
 from claimsathi.extraction import service as facts
 from claimsathi.guards import idempotent_replay, idempotent_store
 from claimsathi.letters.service import MIME, create_basic_letter, export_letter, letter_view, owned_letter
@@ -335,6 +335,25 @@ async def post_document(
 ) -> dict[str, Any]:
     data = await file.read(c.settings.max_file_bytes + 1)
     doc = upload(c, s, case, data=data, declared_mime=file.content_type or "", doc_type=doc_type)
+    _after_commit(bg, c)
+    return {"id": str(doc.id), "type": doc.type, "status": doc.status}
+
+
+class UnlockIn(_In):
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+
+@router.post("/cases/{case_id}/documents/{document_id}/unlock", status_code=202)
+def unlock_document(
+    document_id: uuid.UUID,
+    body: UnlockIn,
+    bg: BackgroundTasks,
+    case: Case = Depends(owned_case),
+    s: Session = Depends(db),
+    c: AppContext = Depends(ctx),
+) -> dict[str, Any]:
+    """FR-008 AC3: the PDF password is used once, in memory, and never stored or logged."""
+    doc = unlock_pdf(c, s, case, document_id, body.password.get_secret_value())
     _after_commit(bg, c)
     return {"id": str(doc.id), "type": doc.type, "status": doc.status}
 

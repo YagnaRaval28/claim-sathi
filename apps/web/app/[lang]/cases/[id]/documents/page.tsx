@@ -4,13 +4,63 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useRequireUser } from "@/lib/use-session";
 import type { CaseSummary } from "@/lib/cases";
 
 const TYPES = ["decision_letter", "settlement_breakup", "policy_wording", "other"] as const;
 const READING = ["queued", "reading", "uploading", "scanning"];
+const MAX_FILE_BYTES = 20 * 1024 * 1024; // FR-008 AC2: checked here before upload, and again by the API
+const RETRY_DELAYS_MS = [1000, 3000, 8000]; // FR-009: up to 3 automatic retries when the connection drops
+
+/** Upload with automatic retries on network loss only; a server answer (even an error) is never retried. */
+async function uploadWithRetry(path: string, form: FormData, onRetry: () => void): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await api(path, { form });
+      return;
+    } catch (err) {
+      // An earlier attempt may have arrived although its answer was lost: the file is already there.
+      if (attempt > 0 && err instanceof ApiError && err.problem.code === "duplicate_file") return;
+      if (err instanceof ApiError || attempt >= RETRY_DELAYS_MS.length) throw err;
+      onRetry();
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
+/** FR-008 AC3: the PDF password is sent once to open the file; it is never stored. */
+function PasswordForm({ caseId, docId, onOpened }: { caseId: string; docId: string; onOpened: () => void }) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const input = e.currentTarget.elements.namedItem("password") as HTMLInputElement;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/cases/${caseId}/documents/${docId}/unlock`, { body: { password: input.value } });
+      input.value = "";
+      onOpened();
+    } catch (err) { setError(err); }
+    setBusy(false);
+  }
+  const map = { pdf_password_incorrect: t("documents.errors.pdf_password_incorrect") };
+  return (
+    <form onSubmit={submit} style={{ marginTop: 8 }}>
+      <div className="field">
+        <label htmlFor={`pw-${docId}`}>{t("documents.password.label")}</label>
+        <p className="muted" id={`pw-help-${docId}`}>{t("documents.password.help")}</p>
+        <input id={`pw-${docId}`} name="password" type="password" className="input" autoComplete="off" required
+               maxLength={128} aria-describedby={`pw-help-${docId}`} />
+      </div>
+      <ProblemNote error={error} map={map} />
+      <button className="btn btn-secondary" disabled={busy} aria-busy={busy}>{t("documents.password.submit")}</button>
+    </form>
+  );
+}
 
 export default function Documents() {
   const { t, href } = useI18n();
@@ -20,6 +70,8 @@ export default function Documents() {
   const [file, setFile] = useState<File | null>(null);
   const [type, setType] = useState<string>("decision_letter");
   const [busy, setBusy] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [tooBig, setTooBig] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(() => api<CaseSummary>(`/cases/${id}`).then(setC).catch(setError), [id]);
@@ -43,7 +95,7 @@ export default function Documents() {
     form.append("file", file);
     form.append("type", type);
     try {
-      await api(`/cases/${id}/documents`, { form });
+      await uploadWithRetry(`/cases/${id}/documents`, form, () => setRetrying(true));
       setFile(null);
       (document.getElementById("file") as HTMLInputElement).value = "";
       await load();
@@ -51,6 +103,7 @@ export default function Documents() {
       setError(err);
     } finally {
       setBusy(false);
+      setRetrying(false);
     }
   }
 
@@ -69,7 +122,13 @@ export default function Documents() {
       <form className="card" onSubmit={upload}>
         <div className="field">
           <label htmlFor="file">{t("documents.choose")}</label>
-          <input id="file" type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <input id="file" type="file" accept="application/pdf" onChange={(e) => {
+            const f = e.target.files?.[0] ?? null;
+            const big = !!f && f.size > MAX_FILE_BYTES;
+            setTooBig(big);
+            setFile(big ? null : f);
+          }} />
+          {tooBig && <p className="field-error" role="alert">{t("documents.errors.payload_too_large")}</p>}
         </div>
         <div className="field">
           <label htmlFor="type">{t("documents.type")}</label>
@@ -79,6 +138,7 @@ export default function Documents() {
         </div>
         <p className="muted">{t("documents.limits")}</p>
         <ProblemNote error={error} map={errMap} />
+        {retrying && <p className="muted" aria-live="polite">{t("documents.retrying")}</p>}
         <button className="btn btn-secondary" disabled={!file || busy} aria-busy={busy}>
           {busy ? t("documents.uploading") : t("documents.upload")}
         </button>
@@ -88,6 +148,7 @@ export default function Documents() {
           <li key={d.id} className="card">
             <strong>{t(`documents.types.${d.type}`)}</strong> · {t(`documents.status.${d.status}`)}
             {d.status_reason && <p className="field-error">{t(`documents.errors.${d.status_reason}`)}</p>}
+            {d.status_reason === "password_required" && <PasswordForm caseId={id} docId={d.id} onOpened={load} />}
           </li>
         ))}
       </ul>

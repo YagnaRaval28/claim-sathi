@@ -6,16 +6,20 @@ magic bytes, size, per-case caps, duplicate, global storage guard. Parsing happe
 
 from __future__ import annotations
 
+import io
 import json
 import uuid
+from datetime import timedelta
 from typing import Any
 
 import pypdfium2 as pdfium
+import pypdfium2.raw as pdfium_c
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from claimsathi.context import AppContext
-from claimsathi.core.errors import AppError
+from claimsathi.core.errors import AppError, not_found
+from claimsathi.guards import hit
 from claimsathi.jobs import Handler, enqueue, step, task
 from claimsathi.models import DOC_TYPES, Case, Document, DocumentObject, DocumentPage
 from claimsathi.security.crypto import sha256
@@ -69,6 +73,10 @@ def upload(c: AppContext, s: Session, case: Case, *, data: bytes, declared_mime:
     return doc
 
 
+def is_password_error(exc: pdfium.PdfiumError) -> bool:
+    return "password" in str(exc).lower()
+
+
 def read_pdf_lines(data: bytes) -> list[list[str]]:
     """Text layer per page → list of non-empty lines. Scanned PDFs return empty pages."""
     pdf = pdfium.PdfDocument(data)
@@ -119,8 +127,11 @@ def make_read_handler(c: AppContext) -> Handler:
         assert obj is not None
         try:
             pages = read_pdf_lines(c.store.get(obj.storage_key))
-        except pdfium.PdfiumError:
-            doc.status, doc.status_reason = "failed", "unreadable_pdf"
+        except pdfium.PdfiumError as exc:
+            # FR-008 AC3: a password-protected PDF waits for the user's password (see unlock_pdf).
+            locked = is_password_error(exc)
+            doc.status = "needs_attention" if locked else "failed"
+            doc.status_reason = "password_required" if locked else "unreadable_pdf"
             step(
                 s,
                 case_id=doc.case_id,
@@ -129,7 +140,7 @@ def make_read_handler(c: AppContext) -> Handler:
                 step_key="reading",
                 ordinal=1,
                 status="failed",
-                error_code="unreadable_pdf",
+                error_code=doc.status_reason,
             )
             return
         if len(pages) > c.settings.max_pages_per_case:
@@ -169,6 +180,37 @@ def make_read_handler(c: AppContext) -> Handler:
             )
 
     return _read
+
+
+def unlock_pdf(c: AppContext, s: Session, case: Case, document_id: uuid.UUID, password: str) -> Document:
+    """FR-008 AC3: open a password-protected PDF with the user's password and keep an unlocked copy in its place,
+    then read it as usual. The password is used in memory only: it is never stored, logged or queued."""
+    doc = s.scalar(select(Document).where(Document.id == document_id, Document.case_id == case.id))
+    if doc is None:
+        raise not_found()
+    if doc.status_reason != "password_required":
+        raise AppError("not_password_protected", 409, "This file doesn't need a password.")
+    hit(s, f"pdf_password:{doc.id}", limit=10, window=timedelta(hours=1))
+    obj = s.scalar(select(DocumentObject).where(DocumentObject.document_id == doc.id))
+    assert obj is not None
+    try:
+        pdf = pdfium.PdfDocument(c.store.get(obj.storage_key), password=password)
+    except pdfium.PdfiumError as exc:
+        if is_password_error(exc):
+            raise AppError("pdf_password_incorrect", 422, "That password didn't open the file.") from None
+        raise AppError("unsupported_media_type", 415, "This PDF can't be read.") from None
+    try:
+        buf = io.BytesIO()
+        pdf.save(buf, flags=pdfium_c.FPDF_REMOVE_SECURITY)
+    finally:
+        pdf.close()
+    unlocked = buf.getvalue()
+    c.store.put(obj.storage_key, unlocked, obj.mime)
+    obj.size_bytes = len(unlocked)  # sha256 stays the uploaded file's, so the same upload is still a duplicate
+    doc.status, doc.status_reason = "queued", None
+    enqueue(s, "doc.read", {"document_id": str(doc.id)}, dedupe_key=f"doc.read:{doc.id}:unlocked")
+    s.commit()
+    return doc
 
 
 def case_lines(c: AppContext, s: Session, case_id: uuid.UUID) -> list[tuple[str, str]]:
