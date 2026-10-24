@@ -439,7 +439,8 @@
       "cancel": "Cancel",
       "replyHint": "Add the insurer's reply on the Documents page, then check your case again.",
       "goDocuments": "Go to Documents"
-    }
+    },
+    "bimaContent": "Copy-ready complaint text"
   },
   "ombudsman": {
     "title": "Can you go to the Ombudsman yet?",
@@ -958,5 +959,28 @@
         "The hospital's summary of your diagnosis and treatment, given when you leave."
       ]
     ]
+  },
+  "bima": {
+    "title": "Bima Bharosa complaint",
+    "intro": "Bima Bharosa is IRDAI's free complaint portal. Filing there is optional and can run alongside your letter to the insurer.",
+    "call": "Call {number} (toll-free)",
+    "free": "Filing is free. Never pay anyone to file it for you.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "count": "{n} characters",
+    "english": "The text is in English because the portal works in English. Check every detail before you paste it.",
+    "back": "Back to Track",
+    "fields": {
+      "summary": "Complaint summary",
+      "insurer": "Insurance company",
+      "policy_number": "Policy number",
+      "claim_number": "Claim number",
+      "decision_date": "Date of the insurer's letter",
+      "amount_claimed": "Amount claimed",
+      "amount_paid": "Amount paid",
+      "amount_disputed": "Amount in dispute",
+      "grievance_date": "Date you wrote to the insurer",
+      "grounds": "Grounds of complaint"
+    }
   }
 }

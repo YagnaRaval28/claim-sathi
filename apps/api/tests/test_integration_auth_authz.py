@@ -137,6 +137,7 @@ def test_authorization_matrix_vs1(client: TestClient, ctx: AppContext) -> None:
         f"/api/v1/cases/{cid}/analyses/latest",
         f"/api/v1/cases/{cid}/sources/chunks/{chunk_id}",
         f"/api/v1/letters/{lid}",
+        f"/api/v1/cases/{cid}/packs/bima-bharosa",
     ]
     post_paths = [
         (f"/api/v1/cases/{cid}/facts/confirm", {"base_version": 0}),

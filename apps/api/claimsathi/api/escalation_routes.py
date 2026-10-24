@@ -145,6 +145,16 @@ def get_pack(
     return esc_svc.pack_view(c, s, case)
 
 
+@router.get("/cases/{case_id}/packs/bima-bharosa")
+def get_bima_bharosa(
+    case: Case = Depends(owned_case), s: Session = Depends(db), c: AppContext = Depends(ctx)
+) -> dict[str, Any]:
+    """FR-025 (P1): copy-ready complaint content. Optional, free, and may run alongside the other stages."""
+    from claimsathi.letters.service import bima_bharosa_content
+
+    return bima_bharosa_content(c, s, case)
+
+
 @router.post("/cases/{case_id}/packs/ombudsman", status_code=202)
 def post_pack(
     body: PackIn,

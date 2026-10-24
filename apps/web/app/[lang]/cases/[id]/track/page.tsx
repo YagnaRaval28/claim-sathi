@@ -227,6 +227,7 @@ export default function Track() {
           <strong>2. {t("track.stageBima")}</strong>
           <p className="muted">{t("track.optional")}</p>
           {e.s2_filed_at && <p>{t("track.filedOn", { date: formatDateDmy(e.s2_filed_at) })}</p>}
+          <Link href={href(`/cases/${id}/track/bima-bharosa`)}>{t("track.bimaContent")} →</Link>
         </div>
         <div className="stage-card" data-state={stageState("ombudsman")}>
           <strong>3. {t("track.stageOmbudsman")}</strong>

@@ -29,4 +29,12 @@ test("track: log the sent letter, see deadlines, Ombudsman blocked until a month
   await expect(page.getByText("Not yet").first()).toBeVisible();
   await expect(page.getByText(/Wait for your insurer's reply/).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Log that I filed" })).toHaveCount(0);
+
+  // FR-025: copy-ready Bima Bharosa content from the optional stage 2.
+  await page.goBack();
+  await page.getByRole("link", { name: /Copy-ready complaint text/ }).click();
+  await expect(page).toHaveURL(/\/track\/bima-bharosa$/);
+  await expect(page.getByLabel("Claim number")).toHaveValue("SHI/CL/2026/000456");
+  await expect(page.getByLabel("Date you wrote to the insurer")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Call 155255/ })).toHaveAttribute("href", "tel:155255");
 });

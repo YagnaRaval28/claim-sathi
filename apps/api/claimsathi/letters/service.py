@@ -446,6 +446,63 @@ def create_ombudsman_letter(c: AppContext, s: Session, case: Case) -> Letter:
     return letter
 
 
+def bima_bharosa_content(c: AppContext, s: Session, case: Case) -> dict[str, Any]:
+    """FR-025: copy-ready text for a Bima Bharosa complaint, in English like the portal. It reuses only the
+    confirmed facts and the verified grounds of the letters (AC1) and passes the same number check (AI-005).
+    Field limits are unknown (OQ-04), so nothing is shortened; the screen shows character counts."""
+    from claimsathi.escalation.service import event_rows
+
+    m = _gather(c, s, case, None)
+    s1 = max((e for e in event_rows(s, case) if e.kind == "s1_sent"), key=lambda e: e.event_date, default=None)
+    claimed, paid = m.f.get("claimed_paise"), m.f.get("paid_paise")
+    decided = f" by its letter dated {format_date_dmy(m.decision_date)}" if m.decision_date else ""
+    what = "rejected" if m.rejected else "partly paid"
+    summary = [f"{m.insurer.rstrip('.')} {what} my health insurance claim {m.claim_no}{decided}."]
+    if m.chosen:
+        summary.append(f"It deducted {format_inr(m.total)} without citing a specific term of my policy.")
+    elif m.reasons:
+        summary.append("Its reason does not cite a specific term of my policy.")
+    if s1 is not None:
+        summary.append(f"I wrote to its grievance redressal officer on {format_date_dmy(s1.event_date)}.")
+    summary.append("I ask the insurer to review the decision and to state the policy terms it relied on.")
+    grounds, notes = _grounds(m, insurer_ref="the insurer's letter", to_insurer=False)
+    sources = {n["n"]: f"{n['source_title']}, {n.get('clause_ref') or ''}".rstrip(", ") for n in notes}
+    lines: list[str] = []
+    for b in grounds:
+        if b["type"] == "para":
+            lines.append(b["text"])
+        elif b["type"] == "quote" and lines:
+            lines[-1] += f" (Source: {sources[int(b['footnote'])]})"
+    fields = [
+        {"key": "summary", "value": " ".join(summary)},
+        {"key": "insurer", "value": m.insurer},
+        {"key": "policy_number", "value": m.policy_no},
+        {"key": "claim_number", "value": m.claim_no},
+    ]
+    if m.decision_date:
+        fields.append({"key": "decision_date", "value": format_date_dmy(m.decision_date)})
+    if claimed:
+        fields.append({"key": "amount_claimed", "value": format_inr(int(claimed))})
+    if paid and not m.rejected:
+        fields.append({"key": "amount_paid", "value": format_inr(int(paid))})
+    if m.chosen:
+        fields.append({"key": "amount_disputed", "value": format_inr(m.total)})
+    if s1 is not None:
+        fields.append({"key": "grievance_date", "value": format_date_dmy(s1.event_date)})
+    fields.append({"key": "grounds", "value": "\n".join(lines)})
+    # Source names come from the verified knowledge-source records, like the letters' footnotes.
+    extra = {m.claim_no, m.policy_no, *(r.text_verbatim for r in m.reasons), *sources.values()}
+    if s1 is not None:
+        extra.add(format_date_dmy(s1.event_date))
+    blocks = [{"type": "para", "text": f["value"]} for f in fields]
+    _check_numbers(blocks, m.f, m.cited, chosen=m.chosen, total=m.total, extra=extra)
+    return {
+        "fields": [{**f, "length": len(f["value"])} for f in fields],
+        "portal_url": "https://bimabharosa.irdai.gov.in",
+        "toll_free": "155255",
+    }
+
+
 def _text_of(blocks: list[dict[str, Any]]) -> str:
     out = []
     for b in blocks:
