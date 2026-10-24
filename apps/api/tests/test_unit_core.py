@@ -206,3 +206,10 @@ def test_letter_html_escapes_everything() -> None:
         {"blocks": [{"type": "para", "text": "<script>alert(1)</script>"}], "footnotes": [], "disclaimer": "d"}
     )
     assert "<script>" not in html and "&lt;script&gt;" in html
+
+
+def test_expected_head_is_the_latest_migration() -> None:
+    from claimsathi.core.migrations import MIGRATIONS, expected_head
+
+    latest = sorted(p.name for p in MIGRATIONS.joinpath("versions").glob("*.py"))[-1]
+    assert expected_head() == latest.split("_")[1]

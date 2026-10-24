@@ -57,7 +57,7 @@ def email_hash(c: AppContext, email: str) -> bytes:
 def request_code(c: AppContext, s: Session, *, email: str, ip_hash: str, language: str) -> None:
     eh = email_hash(c, email)
     hit(s, f"code_req:email:{eh.hex()}", limit=5, window=timedelta(hours=1))
-    hit(s, f"code_req:ip:{ip_hash}", limit=20, window=timedelta(hours=1))
+    hit(s, f"code_req:ip:{ip_hash}", limit=c.settings.code_requests_per_ip_per_hour, window=timedelta(hours=1))
     hit(s, "code_req:global", limit=500, window=timedelta(days=1))
     challenge = EmailChallenge(id=uuid.uuid4(), email_hash=eh, code_hash=b"", expires_at=now_utc() + CODE_TTL)
     code = six_digit_code()
@@ -76,7 +76,7 @@ class SignInResult:
 
 
 def verify_code(c: AppContext, s: Session, *, email: str, code: str, trusted: bool, ip_hash: str) -> SignInResult:
-    hit(s, f"code_verify:ip:{ip_hash}", limit=30, window=timedelta(hours=1))
+    hit(s, f"code_verify:ip:{ip_hash}", limit=c.settings.code_verifies_per_ip_per_hour, window=timedelta(hours=1))
     eh = email_hash(c, email)
     ch = s.scalar(
         select(EmailChallenge)

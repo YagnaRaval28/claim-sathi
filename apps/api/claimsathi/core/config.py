@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     hash_pepper: SecretStr
     code_pepper: SecretStr
     csrf_secret: SecretStr
+    # Sign-in code requests and checks per IP per hour (FR-001). Production keeps 20 and 30; the CI browser suite,
+    # which signs in many times from 127.0.0.1, raises them in its own environment.
+    code_requests_per_ip_per_hour: int = 20
+    code_verifies_per_ip_per_hour: int = 30
     session_cookie_name: str = "cs_session"
     csrf_cookie_name: str = "cs_csrf"
 

@@ -99,6 +99,9 @@ jobs:
       STORAGE_BACKEND: memory
       MAILER: smtp
       LLM_PROVIDER: fake
+      # Every browser test signs in from 127.0.0.1; production keeps the default of 20 per hour.
+      CODE_REQUESTS_PER_IP_PER_HOUR: "200"
+      CODE_VERIFIES_PER_IP_PER_HOUR: "300"
       API_UPSTREAM_URL: http://127.0.0.1:8000
       MAILPIT_URL: http://127.0.0.1:8025
       NEXT_TELEMETRY_DISABLED: "1"

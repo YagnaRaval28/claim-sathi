@@ -208,3 +208,12 @@ def test_csrf_required_on_unsafe_methods(client: TestClient, ctx: AppContext) ->
         headers={**csrf_headers(client), "Origin": "https://evil.example"},
     )
     assert r.status_code == 403
+
+
+def test_readyz_checks_the_database_and_the_migration_head(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert client.get("/api/v1/readyz").json() == {"status": "ready"}
+    import claimsathi.core.migrations as mig
+
+    monkeypatch.setattr(mig, "expected_head", lambda: "9999")
+    r = client.get("/api/v1/readyz")
+    assert r.status_code == 503 and r.json() == {"status": "unavailable", "check": "migrations"}

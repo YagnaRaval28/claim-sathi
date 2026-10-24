@@ -9,7 +9,8 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from claimsathi.analysis.service import analysis_view, ensure_ready, start_analysis
@@ -58,6 +59,21 @@ def _after_commit(bg: BackgroundTasks, c: AppContext) -> None:
 @router.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/readyz")
+def readyz(s: Session = Depends(db)) -> JSONResponse:
+    """Readiness (T-104): the database answers and its schema is at the migration head this build expects, so a
+    new revision never takes traffic against an old schema. Liveness stays /healthz."""
+    from claimsathi.core.migrations import expected_head
+
+    try:
+        current = s.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
+    except SQLAlchemyError:
+        return JSONResponse({"status": "unavailable", "check": "database"}, status_code=503)
+    if current != expected_head():
+        return JSONResponse({"status": "unavailable", "check": "migrations"}, status_code=503)
+    return JSONResponse({"status": "ready"})
 
 
 # --- Auth --------------------------------------------------------------------------------------------
