@@ -119,6 +119,14 @@ def auth_providers(c: AppContext = Depends(ctx)) -> dict[str, bool]:
     return {"google": c.settings.google_enabled, "email": True}
 
 
+@router.get("/public/accuracy")
+def public_accuracy(s: Session = Depends(db)) -> dict[str, Any]:
+    """PUB-04: the latest published citation audit, or null before the first one. Never hard-coded."""
+    from claimsathi.admin.accuracy import latest_published
+
+    return {"audit": latest_published(s)}
+
+
 @router.get("/auth/google/start")
 def google_start(lang: Lang = "en", c: AppContext = Depends(ctx)) -> Response:
     from claimsathi.auth import google

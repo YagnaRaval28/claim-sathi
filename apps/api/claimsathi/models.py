@@ -524,6 +524,20 @@ class ReviewItem(Base):
     )
 
 
+class AccuracyAudit(Base):
+    """PUB-04 / M-04: a published monthly citation audit. Created only when an admin publishes the period."""
+
+    __tablename__ = "accuracy_audits"
+    id: Mapped[uuid.UUID] = _pk()
+    period: Mapped[str] = mapped_column(String(7), nullable=False, unique=True)  # YYYY-MM
+    sample_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    correct: Mapped[int] = mapped_column(Integer, nullable=False)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    published_by: Mapped[uuid.UUID | None] = mapped_column(UUIDPK, ForeignKey("admin_users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = _created()
+    __table_args__ = (CheckConstraint("correct >= 0 AND correct <= sample_size", name="counts"),)
+
+
 class Outbox(Base):
     __tablename__ = "outbox"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

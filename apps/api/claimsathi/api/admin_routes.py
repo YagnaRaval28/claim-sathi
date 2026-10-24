@@ -400,3 +400,32 @@ def admin_disable_rule(
     from claimsathi.admin import content
 
     return content.rule_view(content.disable(s, admin, rule_key, version))
+
+
+# --- Monthly citation audit (FR-040 AC1, FR-043) ------------------------------------------------------
+
+
+@router.get("/accuracy-audits")
+def admin_accuracy_audits(admin: AdminUser = Depends(any_admin), s: Session = Depends(db)) -> dict[str, Any]:
+    from claimsathi.admin import accuracy
+
+    return {"items": accuracy.list_periods(s), "sample_size": accuracy.SAMPLE_SIZE}
+
+
+@router.post("/accuracy-audits/{period}/sample")
+def admin_accuracy_sample(
+    period: str, admin: AdminUser = Depends(admin_only), s: Session = Depends(db)
+) -> dict[str, Any]:
+    from claimsathi.admin import accuracy
+
+    accuracy.draw_sample(s, admin, period)
+    return accuracy.period_view(s, period)
+
+
+@router.post("/accuracy-audits/{period}/publish")
+def admin_accuracy_publish(
+    period: str, admin: AdminUser = Depends(admin_only), s: Session = Depends(db)
+) -> dict[str, Any]:
+    from claimsathi.admin import accuracy
+
+    return accuracy.publish(s, admin, period)

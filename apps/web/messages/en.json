@@ -735,7 +735,9 @@
     "accuracy": {
       "title": "Accuracy",
       "empty": "We haven't published an audit yet. We will publish one before we open to everyone.",
-      "method": "How we check: every quote we show is matched word for word against its source text before you see it. Quotes that don't match are removed, never shown."
+      "method": "How we check: every quote we show is matched word for word against its source text before you see it. Quotes that don't match are removed, never shown.",
+      "result": "Citation accuracy in our last audit: {pct}% of {n} citations (published {date}).",
+      "audit": "Each month we pick citations shown to users at random, across English, Gujarati and Hindi, and a reviewer checks that each quote exists in its source and supports the sentence it is attached to."
     },
     "privacy": {
       "title": "Privacy notice",

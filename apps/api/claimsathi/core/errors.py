@@ -27,6 +27,7 @@ TITLES: dict[str, str] = {
     "pdf_password_incorrect": "Password not accepted",
     "not_password_protected": "No password needed",
     "wording_unavailable": "Wording not available",
+    "audit_not_ready": "Audit not ready",
     "line_items_not_confirmed": "Deductions not confirmed",
     "required_fields_missing": "Required details missing",
     "case_stale": "Details changed",
