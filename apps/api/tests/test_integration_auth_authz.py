@@ -7,6 +7,7 @@ from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from claimsathi.context import AppContext
 from claimsathi.core.clock import now_utc, set_clock
@@ -173,3 +174,15 @@ def test_authorization_matrix_vs1(client: TestClient, ctx: AppContext) -> None:
     assert r.status_code == 404
     assert bodies == {("not_found", "This item isn't available.")}  # identical body: existence not revealed
     assert anon
+
+
+@pytest.mark.req("NFR-017")
+def test_every_table_has_deny_all_row_level_security(ctx: AppContext) -> None:
+    """system-design §3.7: a new table without RLS would be readable through Supabase's Data API."""
+    with ctx.session_factory() as s:
+        open_tables = (
+            s.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND NOT rowsecurity"))
+            .scalars()
+            .all()
+        )
+    assert open_tables == []

@@ -478,6 +478,7 @@ routers → services (transactions; write outbox rows) → repositories (owner-s
 **Supabase hardening.** We do not use Supabase's auto-generated Data API (PostgREST) or Supabase Auth.
 
 - The Data API is **disabled** for both projects. If it cannot be disabled, RLS is enabled with **no policies** (deny-all) on every table.
+  - **Implemented (24 Oct 2026):** migration 0010 enables deny-all RLS on every table and revokes all table, sequence and function privileges (current and default) from `anon` and `authenticated`. A test fails if any table lacks RLS, so new tables can't skip it. Disabling the Data API in the dashboard is still a manual step.
 - The `anon` and `service_role` keys are never shipped to the browser.
 - Storage buckets are private.
 
