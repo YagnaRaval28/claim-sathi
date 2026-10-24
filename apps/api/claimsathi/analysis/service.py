@@ -73,7 +73,28 @@ def start_analysis(s: Session, case: Case) -> Analysis:
     return a
 
 
-def _resolve_wording(s: Session, case: Case) -> KnowledgeSource | None:
+def uploaded_wording(s: Session, case: Case) -> KnowledgeSource | None:
+    """The newest policy wording the user uploaded for this case (scope 'case', FR-014 AC3)."""
+    return s.scalar(
+        select(KnowledgeSource)
+        .where(KnowledgeSource.scope == "case", KnowledgeSource.case_id == case.id)
+        .order_by(KnowledgeSource.created_at.desc())
+        .limit(1)
+    )
+
+
+def resolve_wording(s: Session, case: Case) -> tuple[KnowledgeSource | None, str]:
+    """FR-014 order: the user's uploaded wording, then the library, then none (limited mode). The user can choose
+    the library copy instead of their upload (`wording_preference`)."""
+    uploaded, library = uploaded_wording(s, case), library_wording(s, case)
+    if uploaded is not None and not (case.wording_preference == "library" and library is not None):
+        return uploaded, "uploaded"
+    if library is not None:
+        return library, "library"
+    return None, "none"
+
+
+def library_wording(s: Session, case: Case) -> KnowledgeSource | None:
     if not case.insurer_name:
         return None
     return s.scalar(
@@ -193,7 +214,7 @@ def make_analysis_handler() -> Handler:
             ordinal=1,
             status="in_progress",
         )
-        wording = _resolve_wording(s, case)
+        wording, wording_mode = resolve_wording(s, case)
         keys: set[str] | None = None
         if wording is not None:
             keys = {
@@ -205,9 +226,7 @@ def make_analysis_handler() -> Handler:
                 )
                 if k
             }
-            case.wording_mode, case.wording_source_id = "library", wording.id
-        else:
-            case.wording_mode, case.wording_source_id = "none", None
+        case.wording_mode, case.wording_source_id = wording_mode, wording.id if wording else None
         a.mode = "full" if wording is not None else "limited"
         step(
             s, case_id=case.id, job_kind="analysis", job_ref=a.id, step_key="checking_wording", ordinal=1, status="done"
@@ -294,8 +313,8 @@ RECOVERY = {
     "analysis_failed": ["run_again", "contact_support"],
     "document_unreadable": ["upload_page", "type_details"],
     "no_reasons_found": ["type_reason", "upload_page"],
-    "no_wording": ["check_insurer", "contact_support"],
-    "clause_not_checkable": ["check_insurer"],
+    "no_wording": ["upload_wording", "check_insurer", "contact_support"],
+    "clause_not_checkable": ["upload_wording", "check_insurer"],
 }
 
 
@@ -384,10 +403,16 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
                 "version": wording.version,
                 "effective_from": wording.effective_from.isoformat(),
                 "synthetic": wording.synthetic,
+                "mode": case.wording_mode,  # FR-014 AC1: where the wording came from
             }
             if wording
             else None
         ),
+        "wording_choice": {  # FR-014: offer the switch only when both copies exist
+            "uploaded": uploaded_wording(s, case) is not None,
+            "library": library_wording(s, case) is not None,
+            "preference": case.wording_preference,
+        },
         "totals": a.totals,
         "rule_versions": a.rule_versions,  # FR-039 AC2: the rule versions this analysis applied
         "line_items": [

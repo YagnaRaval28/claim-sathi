@@ -1007,7 +1007,7 @@ FastAPI generates the OpenAPI 3.1 document at `/api/v1/openapi.json`. That docum
 | PATCH `/cases/{id}/reasons/{reason_id}` | owner | `{ category }` | `202 { analysis_id }` | User override; re-runs that reason only |
 | POST `/cases/{id}/reasons` | owner | `{ text, clause_cited? }` | `202 { reason_id, analysis_id }` | FR-019 "type the reason yourself": stored verbatim as confirmed; 409 if details are not confirmed |
 | DELETE `/cases/{id}/reasons/{reason_id}` | owner | — | `202 { analysis_id }` | Typed reasons only; 409 `reason_from_letter` otherwise |
-| PUT `/cases/{id}/wording` | owner | `{ mode, document_id? }` | `Case` | Sets stale |
+| PUT `/cases/{id}/wording` | owner | `{ mode: uploaded \| library }` | `Case` | Stores `cases.wording_preference`; sets stale; 409 `wording_unavailable` if that copy doesn't exist |
 | PATCH `/cases/{id}/checklist/{item_key}` | owner | `{ status, document_id? }` | `ChecklistItem` | |
 | GET `/cases/{id}/sources/chunks/{chunk_id}` | owner, or a public library chunk | — | `{ chunk_id, source: { title, issuer, version, effective_from, url? }, clause_ref, text, translation?: { language, text, provenance: "ai" } }` | |
 
@@ -1038,8 +1038,8 @@ FastAPI generates the OpenAPI 3.1 document at `/api/v1/openapi.json`. That docum
 | `analysis_failed` | The analysis job failed | `run_again`, `contact_support` |
 | `document_unreadable` | A case document is `needs_attention` (no readable text) | `upload_page`, `type_details` |
 | `no_reasons_found` | No decision reason and no deduction in the confirmed details | `type_reason`, `upload_page` |
-| `no_wording` | No policy wording resolved (limited mode) | `check_insurer`, `contact_support` |
-| `clause_not_checkable` | Per item: a clause is cited but there is no wording to check it against | `check_insurer` |
+| `no_wording` | No policy wording resolved (limited mode) | `upload_wording`, `check_insurer`, `contact_support` |
+| `clause_not_checkable` | Per item: a clause is cited but there is no wording to check it against | `upload_wording`, `check_insurer` |
 | `no_relevant_clause`, `model_invalid_output` | Model abstains, or its output is invalid twice (AI-006, AI-008). **Added with the AI counter-point step (T-504).** | `upload_wording`, `type_reason` |
 
 **Letters**

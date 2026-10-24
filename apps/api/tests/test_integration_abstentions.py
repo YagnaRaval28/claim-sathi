@@ -132,7 +132,7 @@ def test_unknown_wording_gives_limited_states_for_the_case_and_each_cited_clause
     a = _analyse(client, h, cid)
     assert a["mode"] == "limited"
     by_code = {g["reason_code"]: g for g in a["abstentions"]}
-    assert by_code["no_wording"]["recovery"] == ["check_insurer", "contact_support"]
+    assert by_code["no_wording"]["recovery"] == ["upload_wording", "check_insurer", "contact_support"]
     room = next(i for i in a["line_items"] if i["description"] == "Room rent")
     assert room["audit_status"] == "CANNOT_ASSESS" and room["abstention"] == "clause_not_checkable"
     assert by_code["clause_not_checkable"]["target_id"] == room["id"]

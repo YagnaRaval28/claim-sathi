@@ -21,7 +21,8 @@ type Target = { id: string; audit_status: string | null; clause_cited_verbatim: 
 type Analysis = {
   id: string; status: string; mode: string; stale: boolean;
   summary: { claimed_paise: number | null; paid_paise: number | null; decision_type: string | null };
-  wording: { title: string; version: string; synthetic: boolean } | null;
+  wording: { title: string; version: string; synthetic: boolean; mode: "uploaded" | "library" } | null;
+  wording_choice: { uploaded: boolean; library: boolean; preference: string };
   line_items: (Target & { description: string; deducted_paise: number })[];
   reasons: (Target & { text: string; category: string | null; user_entered: boolean })[];
   checklist: ChecklistRow[];
@@ -160,6 +161,18 @@ export default function Findings() {
   }
   const rerun = () => setTick((n) => n + 1);
 
+  // FR-014: "use my uploaded copy" or the library copy; the findings are then checked again.
+  async function switchWording(mode: "uploaded" | "library") {
+    setStarting(true);
+    setError(null);
+    try {
+      await api(`/cases/${id}/wording`, { method: "PUT", body: { mode } });
+      await api(`/cases/${id}/analyses`, { body: {}, idempotencyKey: newKey() });
+      setTick((n) => n + 1);
+    } catch (e) { setError(e); }
+    setStarting(false);
+  }
+
   if (!me) return gate;
   const points = new Map((a?.counter_points ?? []).map((p) => [p.id, p]));
   const running = !!a && ACTIVE.includes(a.status);
@@ -215,7 +228,14 @@ export default function Findings() {
             <ProvenanceTag kind="rule" /> <ProvenanceTag kind="document" />
             {a.wording && (
               <p className="muted">{t("findings.wording", { title: a.wording.title, version: a.wording.version })}
+                {" "}({t(`findings.wordingFrom.${a.wording.mode}`)})
                 {a.wording.synthetic && <> · <strong>{t("findings.synthetic")}</strong></>}</p>
+            )}
+            {a.wording && a.wording_choice.uploaded && a.wording_choice.library && (
+              <button type="button" className="btn btn-ghost" disabled={starting}
+                      onClick={() => switchWording(a.wording!.mode === "uploaded" ? "library" : "uploaded")}>
+                {t(a.wording.mode === "uploaded" ? "findings.useLibrary" : "findings.useUploaded")}
+              </button>
             )}
           </div>
           {a.reasons.length > 0 && <h2>{t("findings.reasons")}</h2>}

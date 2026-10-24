@@ -68,7 +68,11 @@ export default function Documents() {
   const { me, gate } = useRequireUser();
   const [c, setC] = useState<CaseSummary | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [type, setType] = useState<string>("decision_letter");
+  // The "Add your policy wording" recovery (FR-019) opens this page with that type chosen.
+  const [type, setType] = useState<string>(() => {
+    const wanted = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("type");
+    return wanted && (TYPES as readonly string[]).includes(wanted) ? wanted : "decision_letter";
+  });
   const [busy, setBusy] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [tooBig, setTooBig] = useState(false);

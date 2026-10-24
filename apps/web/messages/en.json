@@ -269,7 +269,13 @@
       "nextAsk": "Next step: ask your insurer in writing which policy clause they relied on.",
       "terms": "Words used here:",
       "notAdvice": "This is an explanation, not legal advice."
-    }
+    },
+    "wordingFrom": {
+      "uploaded": "your uploaded copy",
+      "library": "from our library"
+    },
+    "useLibrary": "Use our library copy instead",
+    "useUploaded": "Use my uploaded copy"
   },
   "provenance": {
     "verified": "Verified quote",
@@ -818,7 +824,8 @@
       "type_details": "Type the details yourself",
       "check_insurer": "Check the insurer's name",
       "contact_support": "Contact us",
-      "run_again": "Check again"
+      "run_again": "Check again",
+      "upload_wording": "Add your policy wording"
     },
     "form": {
       "reason": "The reason, exactly as your letter states it",

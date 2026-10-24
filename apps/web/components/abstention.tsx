@@ -32,7 +32,8 @@ export function AbstentionState({ caseId, gap, inline = false, onRerun, onRunAga
         </button>
       );
     }
-    const to = { upload_page: `/cases/${caseId}/documents`, type_details: `/cases/${caseId}/details`,
+    const to = { upload_page: `/cases/${caseId}/documents`, upload_wording: `/cases/${caseId}/documents?type=policy_wording`,
+      type_details: `/cases/${caseId}/details`,
       check_insurer: `/cases/${caseId}/details`, contact_support: "/contact" }[r];
     return to ? <Link key={r} className="btn btn-ghost" href={href(to)}>{t(`abstain.actions.${r}`)}</Link> : null;
   };

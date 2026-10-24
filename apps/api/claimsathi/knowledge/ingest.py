@@ -7,6 +7,7 @@ clearly labelled SYNTHETIC fixtures (`synthetic=True`), never regulation text ty
 from __future__ import annotations
 
 import re
+import uuid
 from dataclasses import dataclass
 from datetime import date
 
@@ -93,6 +94,48 @@ def ingest_text(
         s.add(
             KnowledgeChunk(
                 source_id=src.id,
+                ordinal=i,
+                clause_ref=ch.clause_ref,
+                clause_key=clause_key(ch.clause_ref) if ch.clause_ref else None,
+                text=ch.text,
+                flags=[] if ch.clause_ref else ["missing_clause_ref"],
+            )
+        )
+    return src
+
+
+USER_UPLOAD = "user_upload"  # `checked_by` of a case wording: the user's own copy, not admin-attested
+
+
+def ingest_case_wording(
+    s: Session, *, case_id: uuid.UUID, document_id: uuid.UUID, insurer: str | None, text: str
+) -> KnowledgeSource | None:
+    """FR-014: the policy wording a user uploads becomes a source visible only within their case (AC3). It is
+    the user's own document, so it is usable at once; it never enters the shared library."""
+    chunks = chunk_text(text)
+    if not chunks:
+        return None
+    src = KnowledgeSource(
+        type="policy_wording",
+        scope="case",
+        case_id=case_id,
+        issuer=insurer or "Your insurer",
+        title="Your uploaded policy wording",
+        identifier=f"upload:{document_id}",
+        version="uploaded",
+        effective_from=now_utc().date(),
+        synthetic=False,
+        status="published",
+        checked_by=USER_UPLOAD,
+        checked_at=now_utc(),
+    )
+    s.add(src)
+    s.flush()
+    for i, ch in enumerate(chunks, start=1):
+        s.add(
+            KnowledgeChunk(
+                source_id=src.id,
+                case_id=case_id,
                 ordinal=i,
                 clause_ref=ch.clause_ref,
                 clause_key=clause_key(ch.clause_ref) if ch.clause_ref else None,

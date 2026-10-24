@@ -173,6 +173,8 @@ class Case(Base):
     wording_source_id: Mapped[uuid.UUID | None] = mapped_column(
         UUIDPK, ForeignKey("knowledge_sources.id", use_alter=True, name="fk_cases_wording_source")
     )
+    # FR-014: which wording the user wants when both exist ("auto" = their upload first, then the library).
+    wording_preference: Mapped[str] = mapped_column(String(10), nullable=False, server_default="auto")
     lock_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     s2_filed_at: Mapped[date | None] = mapped_column(Date)
     outcome: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
@@ -188,6 +190,7 @@ class Case(Base):
         CheckConstraint("stage IN ('S0_PREPARE','S1_INSURER_GRIEVANCE','S3_OMBUDSMAN','CLOSED')", name="stage"),
         CheckConstraint("policy_type IN ('individual','floater','group','unknown')", name="policy_type"),
         CheckConstraint("wording_mode IN ('library','uploaded','none')", name="wording_mode"),
+        CheckConstraint("wording_preference IN ('auto','uploaded','library')", name="wording_preference"),
         Index("ix_cases_user_status", "user_id", "status"),
         Index(
             "ix_cases_retention_delete_after",

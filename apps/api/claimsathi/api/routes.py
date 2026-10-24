@@ -537,6 +537,26 @@ def delete_typed_reason(
     return {"analysis_id": str(a.id)}
 
 
+class WordingIn(_In):
+    mode: Literal["uploaded", "library"]
+
+
+@router.put("/cases/{case_id}/wording")
+def put_wording(
+    body: WordingIn, case: Case = Depends(owned_case), s: Session = Depends(db), c: AppContext = Depends(ctx)
+) -> dict[str, Any]:
+    """FR-014: use my uploaded copy, or the library copy. The findings must be checked again (stale)."""
+    from claimsathi.analysis.service import library_wording, uploaded_wording
+
+    available = uploaded_wording(s, case) if body.mode == "uploaded" else library_wording(s, case)
+    if available is None:
+        raise AppError("wording_unavailable", 409, "That policy wording isn't available for this case.")
+    case.wording_preference = body.mode
+    facts.mark_stale(case)
+    s.commit()
+    return case_summary(c, s, case)
+
+
 class ChecklistIn(_In):
     status: Literal["pending", "obtained", "uploaded"]
     document_id: uuid.UUID | None = None

@@ -170,7 +170,9 @@ def make_read_handler(c: AppContext) -> Handler:
         doc.status = "ready" if has_text else "needs_attention"
         doc.status_reason = None if has_text else "no_text_layer"
         step(s, case_id=doc.case_id, job_kind="document", job_ref=doc.id, step_key="reading", ordinal=1, status="done")
-        if has_text:
+        if has_text and doc.type == "policy_wording":
+            _use_as_wording(s, doc, pages)
+        elif has_text:
             enqueue(
                 s,
                 "case.extract",
@@ -180,6 +182,21 @@ def make_read_handler(c: AppContext) -> Handler:
             )
 
     return _read
+
+
+def _use_as_wording(s: Session, doc: Document, pages: list[list[str]]) -> None:
+    """FR-014: an uploaded policy wording is not a letter to extract details from; it becomes the case's own
+    wording for the clause checks, and the findings must be checked again."""
+    from claimsathi.extraction.service import mark_stale
+    from claimsathi.knowledge.ingest import ingest_case_wording
+
+    case = s.get(Case, doc.case_id)
+    assert case is not None
+    text = "\n".join(line for page in pages for line in page)
+    if ingest_case_wording(s, case_id=case.id, document_id=doc.id, insurer=case.insurer_name, text=text) is None:
+        doc.status, doc.status_reason = "needs_attention", "no_text_layer"
+        return
+    mark_stale(case)
 
 
 def unlock_pdf(c: AppContext, s: Session, case: Case, document_id: uuid.UUID, password: str) -> Document:
@@ -218,7 +235,7 @@ def case_lines(c: AppContext, s: Session, case_id: uuid.UUID) -> list[tuple[str,
     out: list[tuple[str, str]] = []
     docs = s.scalars(
         select(Document)
-        .where(Document.case_id == case_id, Document.status == "ready")
+        .where(Document.case_id == case_id, Document.status == "ready", Document.type != "policy_wording")
         .order_by(Document.created_at, Document.id)
     ).all()
     for n, doc in enumerate(docs, start=1):

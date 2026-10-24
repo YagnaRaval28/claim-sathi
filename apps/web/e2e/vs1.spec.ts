@@ -53,6 +53,7 @@ test("rejected claim: the reason without a clause gets a finding and a letter", 
   // FR-017: the explanation states the next step and links insurance words to the glossary.
   await expect(page.getByText(/^Next step: write to the insurer's grievance officer/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Repudiation" })).toHaveAttribute("href", "/en/glossary#repudiation");
+  await expect(page.getByText("(from our library)", { exact: false })).toBeVisible(); // FR-014 AC1
   await expect(page.getByText("non-disclosure of pre-existing Diabetes Mellitus").first()).toBeVisible();
   await expect(page.locator(".cite-tab:visible")).toHaveCount(2);  // Para 17(b) and Para 17(a)
   await page.getByRole("link", { name: /Write my letter/ }).click();

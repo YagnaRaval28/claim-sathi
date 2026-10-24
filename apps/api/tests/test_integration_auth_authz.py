@@ -160,6 +160,9 @@ def test_authorization_matrix_vs1(client: TestClient, ctx: AppContext) -> None:
     for p, body in post_paths:
         r = client.post(p, json=body, headers={**hb, "Idempotency-Key": str(uuid.uuid4())})
         assert r.status_code == 404, p
+    r = client.put(f"/api/v1/cases/{cid}/wording", json={"mode": "library"}, headers=hb)
+    assert r.status_code == 404
+    bodies.add((r.json()["code"], r.json()["detail"]))
     r = client.delete(f"/api/v1/cases/{cid}/reasons/{typed['reason_id']}", headers=hb)
     assert r.status_code == 404
     bodies.add((r.json()["code"], r.json()["detail"]))
