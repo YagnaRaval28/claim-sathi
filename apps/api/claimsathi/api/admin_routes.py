@@ -409,7 +409,13 @@ def admin_disable_rule(
 def admin_accuracy_audits(admin: AdminUser = Depends(any_admin), s: Session = Depends(db)) -> dict[str, Any]:
     from claimsathi.admin import accuracy
 
-    return {"items": accuracy.list_periods(s), "sample_size": accuracy.SAMPLE_SIZE}
+    from claimsathi.core.clock import today_ist
+
+    return {
+        "items": accuracy.list_periods(s),
+        "sample_size": accuracy.SAMPLE_SIZE,
+        "current_period": today_ist().strftime("%Y-%m"),  # India time, so the month matches the server's check
+    }
 
 
 @router.post("/accuracy-audits/{period}/sample")

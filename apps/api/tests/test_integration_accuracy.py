@@ -69,6 +69,7 @@ def test_accuracy_is_published_only_after_every_sampled_citation_is_decided(
     assert audit["correct"] == len(samples) - 1  # computed from stored decisions, never hard-coded
     listing = client.get("/api/v1/admin/accuracy-audits", headers=h).json()
     assert listing["sample_size"] == 100 and listing["items"][0]["published"] == audit
+    assert listing["current_period"] == PERIOD
 
 
 def test_audit_periods_are_real_months(

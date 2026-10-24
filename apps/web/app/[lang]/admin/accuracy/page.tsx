@@ -9,19 +9,23 @@ type Period = { period: string; sampled: number; by_language: Record<string, num
   incorrect: number; kb_fix: number; skipped: number;
   published: { sample_size: number; correct: number; published_at: string } | null };
 
-const thisMonth = () => new Date().toISOString().slice(0, 7);
-
 // FR-040 AC1 monthly citation audit and FR-043 publishing (English-only admin console). Sampled citations are
 // decided in the review queue; publishing needs every one decided.
 export default function AdminAccuracy() {
   const router = useRouter();
   const [items, setItems] = useState<Period[] | null>(null);
   const [size, setSize] = useState(100);
-  const [period, setPeriod] = useState(thisMonth);
+  const [period, setPeriod] = useState("");
+  const [current, setCurrent] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(() => api<{ items: Period[]; sample_size: number }>("/admin/accuracy-audits")
-    .then((r) => { setItems(r.items); setSize(r.sample_size); }), []);
+  const load = useCallback(() => api<{ items: Period[]; sample_size: number; current_period: string }>(
+    "/admin/accuracy-audits").then((r) => {
+    setItems(r.items);
+    setSize(r.sample_size);
+    setCurrent(r.current_period);
+    setPeriod((p) => p || r.current_period);
+  }), []);
   useEffect(() => {
     load().catch((e) => {
       if (e instanceof ApiError && e.problem.status === 401) router.replace("/en/admin/sign-in");
@@ -51,8 +55,8 @@ export default function AdminAccuracy() {
       <div className="card">
         <div className="field"><label htmlFor="period">Month</label>
           <input id="period" type="month" className="input" style={{ width: "auto" }} value={period}
-                 max={thisMonth()} onChange={(e) => setPeriod(e.target.value)} /></div>
-        <button className="btn btn-primary" onClick={() => act(period, "sample")}>Draw sample</button>
+                 max={current} onChange={(e) => setPeriod(e.target.value)} /></div>
+        <button className="btn btn-primary" disabled={!period} onClick={() => act(period, "sample")}>Draw sample</button>
       </div>
       {items?.length === 0 && <p>No audits yet.</p>}
       {items?.map((p) => (
