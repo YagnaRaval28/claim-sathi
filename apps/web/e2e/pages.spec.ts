@@ -22,3 +22,11 @@ test("information pages render in Gujarati and Hindi, legal pages marked draft",
   await expect(page.getByText("We haven't published an audit yet.", { exact: false })).toBeVisible();
   await expect(page.locator("main")).not.toContainText("%");
 });
+
+test("glossary: plain-language terms in three languages, linked from the findings explanation", async ({ page }) => {
+  await page.goto("/gu/glossary", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("શબ્દકોશ");
+  await page.goto("/en/glossary#ombudsman", { waitUntil: "networkidle" });
+  await expect(page.locator("#ombudsman dt")).toHaveText("Insurance Ombudsman");
+  await expect(page.locator("footer").getByRole("link", { name: "Glossary" })).toBeVisible();
+});

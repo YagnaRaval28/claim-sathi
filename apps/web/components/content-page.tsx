@@ -36,7 +36,7 @@ export function ExternalLink({ href, children }: { href: string; children: React
 
 const LINKS = [
   ["how-it-works", "how"], ["what-we-dont-do", "dont"], ["free-official-channels", "free"], ["accuracy", "accuracy"],
-  ["privacy", "privacy"], ["terms", "terms"], ["contact", "contact"],
+  ["glossary", "glossary"], ["privacy", "privacy"], ["terms", "terms"], ["contact", "contact"],
 ] as const;
 
 /** Site footer: on every page, so free official help is one tap away from every case screen (FR-044 AC1). */

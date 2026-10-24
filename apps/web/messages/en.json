@@ -251,7 +251,16 @@
     "reasons": "Reasons given for the decision",
     "reasonNoClauseSummary": "{count} reasons have no specific policy clause cited.",
     "sourceError": "Couldn't load this source. Please try again.",
-    "nothingToChallenge": "We didn't find anything the basic letter can challenge yet."
+    "nothingToChallenge": "We didn't find anything the basic letter can challenge yet.",
+    "explain": {
+      "title": "What this means",
+      "reasons": "Reason given, in plain words: {reasons}.",
+      "whyClause": "IRDAI rules say the insurer must name the policy clause it relied on for each amount it disallows or each reason it gives.",
+      "nextLetter": "Next step: write to the insurer's grievance officer and ask them to review the decision. We draft the letter for you below.",
+      "nextAsk": "Next step: ask your insurer in writing which policy clause they relied on.",
+      "terms": "Words used here:",
+      "notAdvice": "This is an explanation, not legal advice."
+    }
   },
   "provenance": {
     "verified": "Verified quote",
@@ -633,7 +642,8 @@
     "accuracy": "Accuracy",
     "privacy": "Privacy",
     "terms": "Terms",
-    "contact": "Contact"
+    "contact": "Contact",
+    "glossary": "Glossary"
   },
   "pages": {
     "updated": "Last updated: {date}",
@@ -809,5 +819,126 @@
       "cancel": "Cancel"
     },
     "removeTyped": "Remove"
+  },
+  "glossary": {
+    "title": "Glossary",
+    "intro": "Insurance words used in ClaimSathi, in plain language.",
+    "terms": [
+      [
+        "grievance-officer",
+        "Grievance Redressal Officer",
+        "The person at your insurance company who handles complaints. You write to them first, before going to the Ombudsman."
+      ],
+      [
+        "ombudsman",
+        "Insurance Ombudsman",
+        "A free official forum that settles complaints against insurers. You usually go there after the insurer has had a chance to reply to your written complaint."
+      ],
+      [
+        "bima-bharosa",
+        "Bima Bharosa",
+        "IRDAI's official online portal for complaints against insurers. Filing is free."
+      ],
+      [
+        "irdai",
+        "IRDAI",
+        "The Insurance Regulatory and Development Authority of India: the regulator that sets the rules insurers must follow."
+      ],
+      [
+        "master-circular",
+        "Master Circular",
+        "A set of IRDAI rules for health insurance, including how insurers must decide and explain claims."
+      ],
+      [
+        "repudiation",
+        "Repudiation",
+        "A full rejection of a claim: the insurer pays nothing."
+      ],
+      [
+        "deduction",
+        "Deduction (disallowance)",
+        "Part of a claim the insurer refused to pay while paying the rest."
+      ],
+      [
+        "policy-clause",
+        "Policy clause",
+        "A numbered term or condition in your policy wording. The insurer should name the clause it relied on for each amount it disallows."
+      ],
+      [
+        "policy-wording",
+        "Policy wording",
+        "The full document with all the terms, conditions and exclusions of your policy."
+      ],
+      [
+        "policy-schedule",
+        "Policy schedule",
+        "The page with your policy's details: who is covered, the sum insured, the dates and the policy number."
+      ],
+      [
+        "sum-insured",
+        "Sum insured",
+        "The most the insurer will pay in a policy year."
+      ],
+      [
+        "ped",
+        "Pre-existing disease (PED)",
+        "An illness or condition you had before the policy started, as your policy defines it."
+      ],
+      [
+        "waiting-period",
+        "Waiting period",
+        "A time after the policy starts during which some illnesses or treatments are not covered."
+      ],
+      [
+        "moratorium",
+        "Moratorium period",
+        "After a set period of continuous cover, the insurer cannot contest a claim for non-disclosure, except for established fraud."
+      ],
+      [
+        "non-disclosure",
+        "Non-disclosure",
+        "Not telling the insurer something relevant, such as an existing illness, when buying the policy."
+      ],
+      [
+        "crc",
+        "Claims Review Committee",
+        "A committee at the insurer whose approval is needed to reject a claim in full."
+      ],
+      [
+        "room-rent",
+        "Room-rent capping (proportionate deduction)",
+        "A limit on the room rent the policy covers. If you stayed in a costlier room, some insurers also cut other charges in the same proportion."
+      ],
+      [
+        "sub-limit",
+        "Sub-limit",
+        "A cap on what the policy pays for a particular treatment or expense."
+      ],
+      [
+        "copay",
+        "Co-payment",
+        "A fixed share of each claim that you pay yourself."
+      ],
+      [
+        "non-payable",
+        "Non-payable items",
+        "Items, such as some consumables, that the policy does not cover."
+      ],
+      [
+        "tpa",
+        "Third-party administrator (TPA)",
+        "A company that processes claims for the insurer."
+      ],
+      [
+        "cashless",
+        "Cashless and reimbursement",
+        "Cashless: the insurer pays the hospital directly. Reimbursement: you pay first and claim the money back."
+      ],
+      [
+        "discharge-summary",
+        "Discharge summary",
+        "The hospital's summary of your diagnosis and treatment, given when you leave."
+      ]
+    ]
   }
 }

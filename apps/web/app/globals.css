@@ -108,6 +108,11 @@ h3 { font-size: 18px; font-weight: 600; margin: 0 0 var(--space-2); }
   padding: var(--space-4); margin-bottom: var(--space-3); }
 @media (min-width: 600px) { .card { padding: var(--space-6); } }
 
+/* PUB-06 glossary */
+.glossary-term { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); scroll-margin-top: var(--space-6); }
+.glossary-term dt { font-weight: 700; }
+.glossary-term dd { margin: var(--space-1) 0 0; }
+
 /* FR-024 English copy under a Gujarati or Hindi letter. */
 .english-copy { margin: var(--space-4) 0; }
 .english-copy summary { cursor: pointer; font-weight: 600; min-height: var(--control-md); display: flex;

@@ -8,6 +8,7 @@ import { ReportLink } from "@/components/dialogs";
 import { CategoryPicker, EvidenceChecklist, type ChecklistRow } from "@/components/findings-extras";
 import { AuditBadge, Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote, ProvenanceTag } from "@/components/ui";
 import { api, ApiError, newKey } from "@/lib/api";
+import { explanation, explanationTerms } from "@/lib/explain";
 import { formatInr } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { useRequireUser } from "@/lib/use-session";
@@ -93,9 +94,11 @@ function Points({ ids, points, onOpen, caseId }: {
 }
 
 export default function Findings() {
-  const { t, href } = useI18n();
+  const { t, href, raw } = useI18n();
   const { id } = useParams<{ id: string }>();
   const { me, gate } = useRequireUser();
+  const glossary = (raw("glossary.terms") as [string, string, string][] | undefined) ?? [];
+  const termName = (key: string) => glossary.find(([k]) => k === key)?.[1] ?? key;
   const [a, setA] = useState<Analysis | null>(null);
   const [none, setNone] = useState(false);
   const [steps, setSteps] = useState<{ key: string; status: string }[]>([]);
@@ -165,7 +168,6 @@ export default function Findings() {
   const reasonsNoClause = a?.reasons.filter((r) => r.audit_status === "NO_CLAUSE_CITED") ?? [];
   const canWrite = done && !a!.stale && (a!.line_items.some((l) => CHALLENGEABLE.includes(l.audit_status ?? ""))
     || a!.reasons.some((r) => CHALLENGEABLE.includes(r.audit_status ?? "") || r.counter_point_ids.length > 0));
-  const rejected = a?.summary.decision_type === "repudiation";
   const caseGaps = a?.abstentions.filter((g) => !g.target_id) ?? [];
   const itemGap = (target: string) => {
     const g = a?.abstentions.find((x) => x.target_id === target);
@@ -198,18 +200,18 @@ export default function Findings() {
             <AbstentionState key={g.reason_code} caseId={id} gap={g} onRerun={rerun} onRunAgain={run} busy={starting} />
           ))}
           <div className="card">
-            {rejected && a.summary.claimed_paise !== null && (
-              <p style={{ fontSize: 18 }}>{t("findings.rejectionSummary", { claimed: formatInr(a.summary.claimed_paise) })}</p>
-            )}
-            {!rejected && a.summary.paid_paise !== null && a.summary.claimed_paise !== null && (
-              <p style={{ fontSize: 18 }}>{t("findings.summary", { paid: formatInr(a.summary.paid_paise),
-                claimed: formatInr(a.summary.claimed_paise) })}</p>
-            )}
-            {noClause.length > 0 && (
-              <p>{t("findings.noClauseSummary", { count: noClause.length,
-                amount: formatInr(noClause.reduce((s, l) => s + l.deducted_paise, 0)) })}</p>
-            )}
-            {reasonsNoClause.length > 0 && <p>{t("findings.reasonNoClauseSummary", { count: reasonsNoClause.length })}</p>}
+            <h2 style={{ marginTop: 0 }}>{t("findings.explain.title")}</h2>
+            {explanation({ decisionType: a.summary.decision_type, claimedPaise: a.summary.claimed_paise,
+              paidPaise: a.summary.paid_paise,
+              noClause: { count: noClause.length, paise: noClause.reduce((s, l) => s + l.deducted_paise, 0) },
+              reasonsNoClause: reasonsNoClause.length, categories: a.reasons.map((r) => r.category ?? ""),
+              canWrite }, t).map((line, i) => <p key={i} style={i === 0 ? { fontSize: 18 } : undefined}>{line}</p>)}
+            <p className="muted">{t("findings.explain.terms")}{" "}
+              {explanationTerms({ decisionType: a.summary.decision_type }).map((id, i) => (
+                <span key={id}>{i > 0 && " · "}<Link href={href(`/glossary#${id}`)}>{termName(id)}</Link></span>
+              ))}
+            </p>
+            <p className="muted">ⓘ {t("findings.explain.notAdvice")}</p>
             <ProvenanceTag kind="rule" /> <ProvenanceTag kind="document" />
             {a.wording && (
               <p className="muted">{t("findings.wording", { title: a.wording.title, version: a.wording.version })}
