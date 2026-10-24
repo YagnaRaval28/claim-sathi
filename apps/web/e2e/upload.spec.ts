@@ -40,3 +40,16 @@ test("a file over 20 MB is refused before upload; a dropped connection is retrie
   await expect(page.getByRole("link", { name: /Continue to check details/ })).toBeVisible({ timeout: 60_000 });
   expect(dropped).toBe(true);
 });
+
+// FR-010: a photo of the letter is read by OCR on our server and its details extracted.
+test("a photo of the letter is read and its details extracted", async ({ page }) => {
+  await newCase(page, "Partly paid");
+  const photo = readFileSync(path.resolve(__dirname, "../../../eval/fixtures/documents/SYN-001-photo.png"));
+  await page.locator("#file").setInputFiles({ name: "letter.png", mimeType: "image/png", buffer: photo });
+  await page.getByRole("button", { name: "Upload" }).click();
+  const next = page.getByRole("link", { name: /Continue to check details/ });
+  await expect(next).toBeVisible({ timeout: 90_000 });
+  await next.click();
+  await expect(page.getByText("₹2,64,820")).toBeVisible();
+  await expect(page.getByText("₹18,400")).toBeVisible();
+});

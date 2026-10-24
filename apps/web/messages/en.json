@@ -123,11 +123,11 @@
   "documents": {
     "title": "Upload your documents",
     "intro": "Start with the letter from your insurer (rejection or settlement letter).",
-    "choose": "Choose a PDF",
+    "choose": "Choose a PDF or a photo",
     "type": "Document type",
     "upload": "Upload",
     "uploading": "Uploading…",
-    "limits": "Up to 15 files, 50 MB in total, 20 MB each. PDF only in this version.",
+    "limits": "Up to 15 files, 50 MB in total, 20 MB each. PDF, JPG or PNG. For a photo: good light, page flat, all edges in view.",
     "continue": "Continue to check details",
     "waiting": "Waiting for documents to finish reading. You can leave this page.",
     "needLetter": "Add the insurer's letter first.",
@@ -150,16 +150,17 @@
     "errors": {
       "duplicate_file": "You've already added this file.",
       "payload_too_large": "This file is too large. The limit is 20 MB.",
-      "unsupported_media_type": "Only PDF files are supported in this version.",
+      "unsupported_media_type": "Upload a PDF, or a JPG or PNG photo of the letter.",
       "case_upload_limit": "This case has reached its upload limit.",
       "storage_full": "Uploads are paused for a while. Please try again later.",
-      "no_text_layer": "This PDF has no readable text (it may be a scan). Photo and scan support is coming.",
+      "no_text_layer": "This PDF has no readable text. Upload a photo of each page instead, or type the details yourself.",
       "unreadable_pdf": "This PDF couldn't be opened. Try saving it again or uploading another copy.",
       "too_many_pages": "This file has too many pages (60 is the limit for a case).",
       "read_failed": "Something went wrong while reading this file. Please upload it again.",
       "password_required": "This PDF is protected with a password. Type it below to open the file.",
       "pdf_password_incorrect": "That password didn't open the file. Check it and try again.",
-      "not_password_protected": "This file doesn't need a password."
+      "not_password_protected": "This file doesn't need a password.",
+      "photo_unclear": "We couldn't read this clearly. Retake the photo in good light, with the page flat and all edges visible."
     },
     "extracting": "Finding the details in your letter…",
     "extractFailed": "We couldn't read the details automatically. You can type them in on the next screen.",
@@ -168,7 +169,8 @@
       "help": "Insurers often use your date of birth, for example 01011980 (DDMMYYYY). We use it once to open the file and never store it.",
       "submit": "Open file"
     },
-    "retrying": "Connection lost. Trying again…"
+    "retrying": "Connection lost. Trying again…",
+    "takePhoto": "Take a photo"
   },
   "details": {
     "title": "Check what we read",

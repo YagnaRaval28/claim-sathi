@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     mail_from: str = "ClaimSathi <no-reply@claimsathi.local>"
 
+    # FR-010 OCR for photos and scanned PDFs. "fake" = no OCR (text-layer PDFs only); "tesseract" runs the free
+    # Tesseract engine inside our own server, so documents never leave it (D-007, D-008).
+    ocr_engine: Literal["fake", "tesseract"] = "fake"
+    tesseract_cmd: str = "tesseract"
+    tessdata_dir: str | None = None
+    ocr_languages: str = "eng+guj+hin"
+    ocr_min_quality: float = 0.70  # AI-006 page quality (mean word confidence), PROVISIONAL
     llm_provider: Literal["fake", "gemini_dev", "vertex"] = "fake"
     llm_model_id: str = "gemini-2.5-flash"
     gemini_dev_api_key: SecretStr = SecretStr("")

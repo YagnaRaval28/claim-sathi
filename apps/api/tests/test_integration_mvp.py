@@ -137,10 +137,10 @@ def test_a_crashed_read_marks_the_document_failed(
 ) -> None:
     import claimsathi.documents.service as docs
 
-    def boom(_data: bytes) -> list[list[str]]:
+    def boom(*_args: object) -> tuple[list[list[str]], list[float | None]]:
         raise RuntimeError("simulated crash")
 
-    monkeypatch.setattr(docs, "read_pdf_lines", boom)
+    monkeypatch.setattr(docs, "read_document", boom)
     h = sign_in(client, ctx)
     cid = _new_case(client, h)["id"]
     _upload_syn001(client, h, cid)

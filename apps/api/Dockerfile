@@ -2,9 +2,10 @@
 FROM python:3.12-slim-bookworm
 
 # WeasyPrint needs Pango/HarfBuzz. Noto fonts cover Latin, Gujarati and Devanagari for letters.
+# Tesseract reads photos and scans inside this container (FR-010): free, and documents never leave it.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
-      fonts-noto-core curl ca-certificates \
+      fonts-noto-core tesseract-ocr tesseract-ocr-guj tesseract-ocr-hin curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:0.10.9 /uv /usr/local/bin/uv

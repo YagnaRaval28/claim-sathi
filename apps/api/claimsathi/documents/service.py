@@ -19,13 +19,15 @@ from sqlalchemy.orm import Session
 
 from claimsathi.context import AppContext
 from claimsathi.core.errors import AppError, not_found
+from claimsathi.documents import ocr
 from claimsathi.guards import hit
 from claimsathi.jobs import Handler, enqueue, step, task
 from claimsathi.models import DOC_TYPES, Case, Document, DocumentObject, DocumentPage
 from claimsathi.security.crypto import sha256
 
 MAGIC = {b"%PDF-": "application/pdf", b"\x89PNG\r\n\x1a\n": "image/png", b"\xff\xd8\xff": "image/jpeg"}
-VS1_ACCEPTED = {"application/pdf"}  # photos/OCR arrive in milestone M4
+PHOTO_TYPES = {"image/png", "image/jpeg"}  # read by OCR (FR-010) when it is switched on
+EXTENSION = {"application/pdf": "pdf", "image/png": "png", "image/jpeg": "jpg"}
 
 
 def sniff_mime(data: bytes) -> str | None:
@@ -44,8 +46,9 @@ def upload(c: AppContext, s: Session, case: Case, *, data: bytes, declared_mime:
     if len(data) > st.max_file_bytes:
         raise AppError("payload_too_large", 413, "Files can be up to 20 MB each.")
     mime = sniff_mime(data)
-    if mime is None or mime != declared_mime or mime not in VS1_ACCEPTED:
-        raise AppError("unsupported_media_type", 415, "Only PDF files are supported in this version.")
+    accepted = {"application/pdf"} | (PHOTO_TYPES if st.ocr_engine == "tesseract" else set())
+    if mime is None or mime != declared_mime or mime not in accepted:
+        raise AppError("unsupported_media_type", 415, "Upload a PDF, or a JPG or PNG photo of the letter.")
     files, size = s.execute(
         select(func.count(DocumentObject.id), func.coalesce(func.sum(DocumentObject.size_bytes), 0)).where(
             DocumentObject.case_id == case.id
@@ -59,7 +62,7 @@ def upload(c: AppContext, s: Session, case: Case, *, data: bytes, declared_mime:
     if c.store.total_bytes() + len(data) > st.storage_limit_mb * 1024 * 1024 * st.storage_guard_pct / 100:
         raise AppError("storage_full", 503, "Uploads are paused for a while. Please try again later.")
     doc = Document(id=uuid.uuid4(), case_id=case.id, type=doc_type, status="queued")
-    key = f"cases/{case.id}/documents/{doc.id}/objects/0.pdf"
+    key = f"cases/{case.id}/documents/{doc.id}/objects/0.{EXTENSION[mime]}"
     c.store.put(key, data, mime)
     s.add(doc)
     s.flush()
@@ -88,6 +91,56 @@ def read_pdf_lines(data: bytes) -> list[list[str]]:
         return pages
     finally:
         pdf.close()
+
+
+class TooManyPages(Exception):
+    pass
+
+
+def read_document(c: AppContext, data: bytes, mime: str) -> tuple[list[list[str]], list[float | None]]:
+    """FR-010: each page's text lines and, for pages read by OCR, the OCR quality (None for a text layer).
+    Photos are always OCR'd; a PDF page is OCR'd only when it has no text layer and OCR is on."""
+    st = c.settings
+    if mime in PHOTO_TYPES:
+        page = _ocr(c, ocr.image_png(data))
+        return [page.lines], [page.quality]
+    pdf = pdfium.PdfDocument(data)
+    try:
+        if len(pdf) > st.max_pages_per_case:
+            raise TooManyPages
+        pages: list[list[str]] = []
+        quality: list[float | None] = []
+        for page in pdf:
+            text = page.get_textpage().get_text_range()
+            lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+            q: float | None = None
+            if not lines and st.ocr_engine == "tesseract":
+                scanned = _ocr(c, ocr.pdf_page_png(page))
+                lines, q = scanned.lines, scanned.quality
+            pages.append(lines)
+            quality.append(q)
+        return pages, quality
+    finally:
+        pdf.close()
+
+
+def _stop(s: Session, doc: Document, status: str, reason: str) -> None:
+    doc.status, doc.status_reason = status, reason
+    step(
+        s,
+        case_id=doc.case_id,
+        job_kind="document",
+        job_ref=doc.id,
+        step_key="reading",
+        ordinal=1,
+        status="failed",
+        error_code=reason,
+    )
+
+
+def _ocr(c: AppContext, png: bytes) -> ocr.OcrPage:
+    st = c.settings
+    return ocr.ocr_png(png, cmd=st.tesseract_cmd, languages=st.ocr_languages, tessdata_dir=st.tessdata_dir)
 
 
 def _read_failed(s: Session, payload: dict[str, Any]) -> None:
@@ -126,49 +179,41 @@ def make_read_handler(c: AppContext) -> Handler:
         obj = s.scalar(select(DocumentObject).where(DocumentObject.document_id == doc.id))
         assert obj is not None
         try:
-            pages = read_pdf_lines(c.store.get(obj.storage_key))
+            pages, quality = read_document(c, c.store.get(obj.storage_key), obj.mime)
+        except TooManyPages:
+            _stop(s, doc, "rejected", "too_many_pages")
+            return
+        except ocr.OcrUnavailable:
+            _stop(s, doc, "failed", "read_failed")  # our OCR engine failed: never the user's fault
+            return
         except pdfium.PdfiumError as exc:
             # FR-008 AC3: a password-protected PDF waits for the user's password (see unlock_pdf).
-            locked = is_password_error(exc)
-            doc.status = "needs_attention" if locked else "failed"
-            doc.status_reason = "password_required" if locked else "unreadable_pdf"
-            step(
-                s,
-                case_id=doc.case_id,
-                job_kind="document",
-                job_ref=doc.id,
-                step_key="reading",
-                ordinal=1,
-                status="failed",
-                error_code=doc.status_reason,
-            )
-            return
-        if len(pages) > c.settings.max_pages_per_case:
-            doc.status, doc.status_reason = "rejected", "too_many_pages"
-            step(
-                s,
-                case_id=doc.case_id,
-                job_kind="document",
-                job_ref=doc.id,
-                step_key="reading",
-                ordinal=1,
-                status="failed",
-                error_code="too_many_pages",
-            )
+            if is_password_error(exc):
+                _stop(s, doc, "needs_attention", "password_required")
+            else:
+                _stop(s, doc, "failed", "unreadable_pdf")
             return
         for i, lines in enumerate(pages, start=1):
             key = f"cases/{doc.case_id}/documents/{doc.id}/ocr/{i}.json"
             payload_lines = [{"id": f"p{i}-l{j}", "text": t} for j, t in enumerate(lines, 1)]
             c.store.put(key, json.dumps(payload_lines, ensure_ascii=False).encode(), "application/json")
+            q = quality[i - 1]
             s.add(
                 DocumentPage(
-                    document_id=doc.id, case_id=doc.case_id, page_no=i, ocr_key=key, ocr_quality=1.0 if lines else 0.0
+                    document_id=doc.id,
+                    case_id=doc.case_id,
+                    page_no=i,
+                    ocr_key=key,
+                    ocr_quality=q if q is not None else (1.0 if lines else 0.0),
                 )
             )
         doc.page_count = len(pages)
-        has_text = any(pages)
+        # AI-006: a page OCR could only read poorly is not guessed at; the user retakes the photo.
+        unclear = any(q is not None and q < c.settings.ocr_min_quality for q in quality)
+        has_text = any(pages) and not unclear
         doc.status = "ready" if has_text else "needs_attention"
-        doc.status_reason = None if has_text else "no_text_layer"
+        ocr_used = any(q is not None for q in quality)
+        doc.status_reason = None if has_text else ("photo_unclear" if ocr_used else "no_text_layer")
         step(s, case_id=doc.case_id, job_kind="document", job_ref=doc.id, step_key="reading", ordinal=1, status="done")
         if has_text and doc.type == "policy_wording":
             _use_as_wording(s, doc, pages)

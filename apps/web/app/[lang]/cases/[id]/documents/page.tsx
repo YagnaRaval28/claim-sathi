@@ -90,6 +90,13 @@ export default function Documents() {
     return () => clearInterval(h);
   }, [reading, extracting, load]);
 
+  function pick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    const big = !!f && f.size > MAX_FILE_BYTES;
+    setTooBig(big);
+    setFile(big ? null : f);
+  }
+
   async function upload(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
@@ -101,7 +108,7 @@ export default function Documents() {
     try {
       await uploadWithRetry(`/cases/${id}/documents`, form, () => setRetrying(true));
       setFile(null);
-      (document.getElementById("file") as HTMLInputElement).value = "";
+      for (const input of document.querySelectorAll<HTMLInputElement>("form input[type=file]")) input.value = "";
       await load();
     } catch (err) {
       setError(err);
@@ -126,12 +133,13 @@ export default function Documents() {
       <form className="card" onSubmit={upload}>
         <div className="field">
           <label htmlFor="file">{t("documents.choose")}</label>
-          <input id="file" type="file" accept="application/pdf" onChange={(e) => {
-            const f = e.target.files?.[0] ?? null;
-            const big = !!f && f.size > MAX_FILE_BYTES;
-            setTooBig(big);
-            setFile(big ? null : f);
-          }} />
+          <input id="file" type="file" accept="application/pdf,image/jpeg,image/png" onChange={pick} />
+          {/* FR-008: on a phone this opens the camera; the photo is read by OCR on our server (FR-010). */}
+          <label className="btn btn-secondary" style={{ alignSelf: "flex-start" }}>
+            {t("documents.takePhoto")}
+            <input type="file" accept="image/*" capture="environment" className="visually-hidden" onChange={pick} />
+          </label>
+          {file && <p className="muted">{file.name}</p>}
           {tooBig && <p className="field-error" role="alert">{t("documents.errors.payload_too_large")}</p>}
         </div>
         <div className="field">

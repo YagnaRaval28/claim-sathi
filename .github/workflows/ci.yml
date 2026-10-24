@@ -35,8 +35,8 @@ jobs:
         working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
-      - name: System libraries for WeasyPrint (Pango/HarfBuzz) and Noto fonts
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b fonts-noto-core
+      - name: System libraries for WeasyPrint (Pango/HarfBuzz), Noto fonts and Tesseract OCR (eng, guj, hin)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b fonts-noto-core tesseract-ocr tesseract-ocr-guj tesseract-ocr-hin
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.10.9"
@@ -99,6 +99,7 @@ jobs:
       STORAGE_BACKEND: memory
       MAILER: smtp
       LLM_PROVIDER: fake
+      OCR_ENGINE: tesseract
       # Every browser test signs in from 127.0.0.1; production keeps the default of 20 per hour.
       CODE_REQUESTS_PER_IP_PER_HOUR: "200"
       CODE_VERIFIES_PER_IP_PER_HOUR: "300"
@@ -107,8 +108,8 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
-      - name: System libraries for WeasyPrint (Pango/HarfBuzz) and Noto fonts
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b fonts-noto-core
+      - name: System libraries for WeasyPrint (Pango/HarfBuzz), Noto fonts and Tesseract OCR (eng, guj, hin)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b fonts-noto-core tesseract-ocr tesseract-ocr-guj tesseract-ocr-hin
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.10.9"
