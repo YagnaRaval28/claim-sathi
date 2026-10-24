@@ -308,6 +308,7 @@ class DecisionReason(Base):
     category: Mapped[str | None] = mapped_column(String(32))
     category_source: Mapped[str | None] = mapped_column(String(8))  # user | model
     audit_status: Mapped[str | None] = mapped_column(String(32))
+    user_entered: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))  # FR-019
     __table_args__ = (CheckConstraint(_CATEGORY_CHECK, name="category"),)
 
 

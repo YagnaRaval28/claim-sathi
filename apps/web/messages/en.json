@@ -227,7 +227,6 @@
     "noClauseSummary": "{count} deductions ({amount}) have no specific policy clause cited.",
     "wording": "Checked against: {title}, version {version}",
     "synthetic": "SYNTHETIC test source, not real legal text",
-    "limited": "We couldn't find your policy wording, so we checked the rules only.",
     "stale": "Your details changed. Update the findings.",
     "update": "Update findings",
     "writeLetter": "Write my letter",
@@ -248,8 +247,6 @@
       "checking_deductions": "Checking deductions",
       "checking_sources": "Checking every quote"
     },
-    "failed": "The check didn't finish. Please try again.",
-    "runAgain": "Check again",
     "rejectionSummary": "Your insurer rejected your claim of {claimed}.",
     "reasons": "Reasons given for the decision",
     "reasonNoClauseSummary": "{count} reasons have no specific policy clause cited.",
@@ -770,5 +767,43 @@
         ]
       ]
     }
+  },
+  "abstain": {
+    "analysis_failed": {
+      "title": "The check didn't finish",
+      "why": "Something went wrong on our side. Nothing you entered is lost."
+    },
+    "document_unreadable": {
+      "title": "We couldn't read one of your documents",
+      "why": "It may be a photo or a scan without readable text. Upload a clearer PDF, or type the details yourself."
+    },
+    "no_reasons_found": {
+      "title": "We couldn't find a reason in your letter",
+      "why": "Type the reason exactly as your letter states it, or upload the page that has it."
+    },
+    "no_wording": {
+      "title": "We don't have your policy wording",
+      "why": "We couldn't find this insurer's policy wording, so we checked the rules only. Check that the insurer's name matches your letter."
+    },
+    "clause_not_checkable": {
+      "title": "We couldn't check this clause",
+      "why": "Your letter cites a clause, but we don't have your policy wording to check it against."
+    },
+    "actions": {
+      "type_reason": "Type the reason yourself",
+      "upload_page": "Upload another page",
+      "type_details": "Type the details yourself",
+      "check_insurer": "Check the insurer's name",
+      "contact_support": "Contact us",
+      "run_again": "Check again"
+    },
+    "form": {
+      "reason": "The reason, exactly as your letter states it",
+      "reasonHelp": "Copy the words from the letter. We use them exactly as you type them.",
+      "clause": "Clause or section number, if the letter gives one (optional)",
+      "save": "Save and check again",
+      "cancel": "Cancel"
+    },
+    "removeTyped": "Remove"
   }
 }

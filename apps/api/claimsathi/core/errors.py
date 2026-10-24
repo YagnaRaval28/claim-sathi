@@ -23,6 +23,7 @@ TITLES: dict[str, str] = {
     "email_code_invalid": "Code not accepted",
     "email_code_expired": "Code expired",
     "fields_not_confirmed": "Details not confirmed",
+    "reason_from_letter": "Reason read from your letter",
     "line_items_not_confirmed": "Deductions not confirmed",
     "required_fields_missing": "Required details missing",
     "case_stale": "Details changed",

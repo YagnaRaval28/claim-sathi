@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from claimsathi.ai.gateway import BudgetExceeded, ModelOutputInvalid, TransientProviderError
@@ -77,7 +77,8 @@ def apply_extraction(
         delete(ExtractedField).where(ExtractedField.case_id == case.id, ExtractedField.name.not_in(user_set or {""}))
     )
     s.execute(delete(LineItem).where(LineItem.case_id == case.id, LineItem.user_entered.is_(False)))
-    s.execute(delete(DecisionReason).where(DecisionReason.case_id == case.id))
+    s.execute(delete(DecisionReason).where(DecisionReason.case_id == case.id, DecisionReason.user_entered.is_(False)))
+    typed = s.scalar(select(func.max(DecisionReason.ordinal)).where(DecisionReason.case_id == case.id)) or 0
     seen: set[str] = set(user_set)  # a value the user typed always wins over a newly extracted one
     for f in result.fields:
         name = _store_name(f.name)
@@ -133,7 +134,7 @@ def apply_extraction(
                 source_ref={"line_ids": li.line_ids},
             )
         )
-    for i, r in enumerate(result.reasons, start=1):
+    for i, r in enumerate(result.reasons, start=typed + 1):  # a reason the user typed (FR-019) is kept
         if _verbatim(r.text_verbatim, r.line_ids, by_id):
             s.add(
                 DecisionReason(
@@ -337,6 +338,39 @@ def _validate_value(name: str, value: str) -> str:
 def mark_stale(case: Case) -> None:
     if case.fields_confirmed_at is not None:
         case.stale_since = now_utc()
+
+
+MAX_TYPED_REASONS = 10
+
+
+def add_typed_reason(s: Session, case: Case, *, text: str, clause_cited: str | None) -> DecisionReason:
+    """FR-019: a reason the user types from their letter is a confirmed field, stored verbatim. Committed here so the
+    analysis started next is newer than the stale mark (letters written before it must be written again)."""
+    text = text.strip()
+    if not text:
+        raise AppError("validation_error", 422, "Type the reason as your letter states it.")
+    reasons = s.scalars(select(DecisionReason).where(DecisionReason.case_id == case.id)).all()
+    if sum(r.user_entered for r in reasons) >= MAX_TYPED_REASONS:
+        raise AppError("validation_error", 422, "You can type up to 10 reasons.")
+    reason = DecisionReason(
+        case_id=case.id,
+        ordinal=max((r.ordinal for r in reasons), default=0) + 1,
+        text_verbatim=text,
+        clause_cited_verbatim=(clause_cited or "").strip() or None,
+        user_entered=True,
+    )
+    s.add(reason)
+    mark_stale(case)
+    s.commit()
+    return reason
+
+
+def remove_typed_reason(s: Session, case: Case, reason: DecisionReason) -> None:
+    if not reason.user_entered:
+        raise AppError("reason_from_letter", 409, "This reason was read from your letter, so it can't be removed.")
+    s.delete(reason)
+    mark_stale(case)
+    s.commit()
 
 
 def patch_facts(c: AppContext, s: Session, case: Case, base_version: int, edits: list[dict[str, Any]]) -> None:

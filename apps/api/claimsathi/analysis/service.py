@@ -8,6 +8,7 @@ item is ever labelled "appears valid": that would need an analysis we have not r
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import date
 from typing import Any
 
@@ -25,6 +26,7 @@ from claimsathi.models import (
     Citation,
     CounterPoint,
     DecisionReason,
+    Document,
     ExtractedField,
     JobStep,
     KnowledgeChunk,
@@ -44,7 +46,8 @@ def _rule(s: Session, key: str) -> Rule | None:
     return s.scalar(select(Rule).where(Rule.rule_key == key, Rule.status == "enabled"))
 
 
-def start_analysis(s: Session, case: Case) -> Analysis:
+def ensure_ready(s: Session, case: Case) -> None:
+    """The case can be checked: details confirmed, and the deductions too for a partly paid claim."""
     if case.fields_confirmed_at is None:
         raise AppError("fields_not_confirmed", 409, "Confirm your case details before checking.")
     decision = s.scalar(
@@ -52,6 +55,10 @@ def start_analysis(s: Session, case: Case) -> Analysis:
     )
     if decision == "partial" and case.line_items_confirmed_at is None:
         raise AppError("line_items_not_confirmed", 409, "Confirm the list of deductions first.")
+
+
+def start_analysis(s: Session, case: Case) -> Analysis:
+    ensure_ready(s, case)
     for old in s.scalars(
         select(Analysis).where(Analysis.case_id == case.id, Analysis.status.in_(("queued", "running", "succeeded")))
     ):
@@ -280,6 +287,40 @@ def make_analysis_handler() -> Handler:
     return _run
 
 
+# FR-019 abstention states. Each trigger the deterministic pipeline can raise has one reason code and its recovery
+# actions (system-design §5 Analysis). The model's own abstentions (no_relevant_clause, model_invalid_output) arrive
+# with the AI counter-point step.
+RECOVERY = {
+    "analysis_failed": ["run_again", "contact_support"],
+    "document_unreadable": ["upload_page", "type_details"],
+    "no_reasons_found": ["type_reason", "upload_page"],
+    "no_wording": ["check_insurer", "contact_support"],
+    "clause_not_checkable": ["check_insurer"],
+}
+
+
+def abstentions(
+    a: Analysis, items: Sequence[LineItem], reasons: Sequence[DecisionReason], unreadable_docs: int
+) -> list[dict[str, Any]]:
+    def one(code: str, target: uuid.UUID | None = None) -> dict[str, Any]:
+        return {"target_id": str(target) if target else None, "reason_code": code, "recovery": RECOVERY[code]}
+
+    if a.status == "failed":
+        return [one("analysis_failed")]
+    if a.status != "succeeded":
+        return []
+    out: list[dict[str, Any]] = []
+    if unreadable_docs:
+        out.append(one("document_unreadable"))
+    if not reasons and not any(li.deducted_paise > 0 for li in items):
+        out.append(one("no_reasons_found"))
+    if a.mode == "limited":
+        out.append(one("no_wording"))
+        targets = [(li.id, li.audit_status) for li in items] + [(r.id, r.audit_status) for r in reasons]
+        out += [one("clause_not_checkable", t) for t, status in targets if status == "CANNOT_ASSESS"]
+    return out
+
+
 def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
     a = s.scalar(
         select(Analysis)
@@ -317,6 +358,9 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
     reasons = s.scalars(
         select(DecisionReason).where(DecisionReason.case_id == case.id).order_by(DecisionReason.ordinal)
     ).all()
+    unreadable = s.scalar(select(func.count()).where(Document.case_id == case.id, Document.status == "needs_attention"))
+    gaps = abstentions(a, items, reasons, unreadable or 0)
+    gap_by_target = {g["target_id"]: g["reason_code"] for g in gaps if g["target_id"]}
     points_by_target: dict[uuid.UUID, list[str]] = {}
     for p in shown:
         points_by_target.setdefault(p.target_id, []).append(str(p.id))
@@ -355,6 +399,7 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
                 "audit_status": li.audit_status,
                 "clause_cited_verbatim": li.clause_cited_verbatim,
                 "counter_point_ids": points_by_target.get(li.id, []),
+                "abstention": gap_by_target.get(str(li.id)),
                 "include_by_default": li.audit_status in ("NO_CLAUSE_CITED", "CLAUSE_NOT_FOUND"),
             }
             for li in items
@@ -367,7 +412,9 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
                 "clause_cited_verbatim": r.clause_cited_verbatim,
                 "category": r.category,
                 "category_source": r.category_source,
+                "user_entered": r.user_entered,
                 "counter_point_ids": points_by_target.get(r.id, []),
+                "abstention": gap_by_target.get(str(r.id)),
             }
             for r in reasons
         ],
@@ -386,4 +433,5 @@ def analysis_view(s: Session, case: Case) -> dict[str, Any] | None:
             for p in shown
         ],
         "dropped_count": len(points) - len(shown),
+        "abstentions": gaps,
     }

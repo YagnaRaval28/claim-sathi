@@ -125,6 +125,7 @@ def test_authorization_matrix_vs1(client: TestClient, ctx: AppContext) -> None:
     letter = client.post(
         f"/api/v1/cases/{cid}/letters", json={}, headers={**ha, "Idempotency-Key": str(uuid.uuid4())}
     ).json()
+    typed = client.post(f"/api/v1/cases/{cid}/reasons", json={"text": "Not payable."}, headers=ha).json()
     chunk_id = analysis["counter_points"][0]["citations"][0]["chunk_id"]
     lid = letter["id"]
     get_paths = [
@@ -142,6 +143,7 @@ def test_authorization_matrix_vs1(client: TestClient, ctx: AppContext) -> None:
         (f"/api/v1/cases/{cid}/letters", {}),
         (f"/api/v1/letters/{lid}/review", {"version": 1}),
         (f"/api/v1/letters/{lid}/exports", {"format": "pdf"}),
+        (f"/api/v1/cases/{cid}/reasons", {"text": "Not payable."}),
     ]
     client.cookies.clear()
     anon = csrf_headers(client)
@@ -156,6 +158,9 @@ def test_authorization_matrix_vs1(client: TestClient, ctx: AppContext) -> None:
     for p, body in post_paths:
         r = client.post(p, json=body, headers={**hb, "Idempotency-Key": str(uuid.uuid4())})
         assert r.status_code == 404, p
+    r = client.delete(f"/api/v1/cases/{cid}/reasons/{typed['reason_id']}", headers=hb)
+    assert r.status_code == 404
+    bodies.add((r.json()["code"], r.json()["detail"]))
     r = client.post(
         f"/api/v1/cases/{cid}/documents", headers=hb, files={"file": ("a.pdf", b"%PDF-1.4 x", "application/pdf")}
     )

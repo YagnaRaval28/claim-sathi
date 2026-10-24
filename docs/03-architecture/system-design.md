@@ -747,7 +747,7 @@ erDiagram
 | `document_objects` | `document_id FK ON DELETE CASCADE`, `case_id`, `seq smallint`, `storage_key text NOT NULL`, `mime CHECK (mime IN ('application/pdf','image/jpeg','image/png'))`, `size_bytes int CHECK (size_bytes <= 20971520)`, `sha256 bytea NOT NULL`, `UNIQUE(case_id, sha256)` | (document_id, seq) |
 | `document_pages` | `document_id FK ON DELETE CASCADE`, `case_id`, `page_no int`, `image_key` (1,600 px WebP), `thumb_key` (≤30 KB), `ocr_key`, `ocr_quality real CHECK (ocr_quality BETWEEN 0 AND 1)`, `UNIQUE(document_id, page_no)` | — |
 | `extracted_fields` | `case_id`, `name CHECK (…FR-010 list…)`, `value text NULL`, `value_enc bytea NULL`, `extracted_value text NULL`, `extracted_value_enc bytea NULL`, `confidence real`, `status CHECK (status IN ('found','not_found','user_entered','unknown_by_user'))`, `source_ref jsonb`, `confirmed_by_user bool`, `UNIQUE(case_id, name)`, `CHECK (value IS NULL OR value_enc IS NULL)` | — |
-| `decision_reasons` | `case_id`, `ordinal`, `text_verbatim NOT NULL`, `clause_cited_verbatim NULL`, `source_ref jsonb`, `category CHECK (…14-category taxonomy…)`, `category_confidence real`, `category_source CHECK (category_source IN ('model','user'))`, `audit_status NULL` | (case_id, ordinal) |
+| `decision_reasons` | `case_id`, `ordinal`, `text_verbatim NOT NULL`, `clause_cited_verbatim NULL`, `source_ref jsonb`, `category CHECK (…14-category taxonomy…)`, `category_confidence real`, `category_source CHECK (category_source IN ('model','user'))`, `audit_status NULL`, `user_entered bool` (FR-019: typed by the user, kept when another page is read) | (case_id, ordinal) |
 | `line_items` | `case_id`, `ordinal`, `description NOT NULL`, `billed_paise bigint NULL CHECK (≥0)`, `deducted_paise bigint NOT NULL CHECK (≥0)`, `CHECK (billed_paise IS NULL OR deducted_paise <= billed_paise)`, `reason_verbatim`, `clause_cited_verbatim`, `category`, `audit_status CHECK (audit_status IN ('NO_CLAUSE_CITED','CLAUSE_NOT_FOUND','CLAUSE_FOUND_QUESTIONABLE','CLAUSE_FOUND_APPEARS_VALID','CANNOT_ASSESS'))`, `user_entered bool`, `unitemised bool`, `source_ref jsonb` | (case_id, ordinal) |
 | `checklist_items` | `PK(case_id, item_key)`, `status CHECK (status IN ('pending','obtained','uploaded'))`, `document_id NULL FK` | — |
 
@@ -1005,6 +1005,8 @@ FastAPI generates the OpenAPI 3.1 document at `/api/v1/openapi.json`. That docum
 | POST `/cases/{id}/analyses` **IK** | owner + consent | `{}` | `202 { id, status }` | 409 gates; 503 `ai_paused_budget` |
 | GET `/cases/{id}/analyses/latest` | owner | `?lang=` | `Analysis` | |
 | PATCH `/cases/{id}/reasons/{reason_id}` | owner | `{ category }` | `202 { analysis_id }` | User override; re-runs that reason only |
+| POST `/cases/{id}/reasons` | owner | `{ text, clause_cited? }` | `202 { reason_id, analysis_id }` | FR-019 "type the reason yourself": stored verbatim as confirmed; 409 if details are not confirmed |
+| DELETE `/cases/{id}/reasons/{reason_id}` | owner | — | `202 { analysis_id }` | Typed reasons only; 409 `reason_from_letter` otherwise |
 | PUT `/cases/{id}/wording` | owner | `{ mode, document_id? }` | `Case` | Sets stale |
 | PATCH `/cases/{id}/checklist/{item_key}` | owner | `{ status, document_id? }` | `ChecklistItem` | |
 | GET `/cases/{id}/sources/chunks/{chunk_id}` | owner, or a public library chunk | — | `{ chunk_id, source: { title, issuer, version, effective_from, url? }, clause_ref, text, translation?: { language, text, provenance: "ai" } }` | |
@@ -1028,6 +1030,17 @@ FastAPI generates the OpenAPI 3.1 document at `/api/v1/openapi.json`. That docum
   "checklist": [{ "item_key": "doctor_certificate_first_diagnosis", "status": "pending" }],
   "abstentions": [{ "target_id": "…", "reason_code": "no_relevant_clause", "recovery": ["upload_wording","type_reason"] }] }
 ```
+
+**Abstention reason codes (FR-019, approved 24 Oct 2026).** Each trigger maps to one code and fixed recovery actions. `target_id` is null for a case-level state. Items and reasons also carry their own code in `abstention`.
+
+| `reason_code` | Trigger (deterministic) | `recovery` |
+|---|---|---|
+| `analysis_failed` | The analysis job failed | `run_again`, `contact_support` |
+| `document_unreadable` | A case document is `needs_attention` (no readable text) | `upload_page`, `type_details` |
+| `no_reasons_found` | No decision reason and no deduction in the confirmed details | `type_reason`, `upload_page` |
+| `no_wording` | No policy wording resolved (limited mode) | `check_insurer`, `contact_support` |
+| `clause_not_checkable` | Per item: a clause is cited but there is no wording to check it against | `check_insurer` |
+| `no_relevant_clause`, `model_invalid_output` | Model abstains, or its output is invalid twice (AI-006, AI-008). **Added with the AI counter-point step (T-504).** | `upload_wording`, `type_reason` |
 
 **Letters**
 

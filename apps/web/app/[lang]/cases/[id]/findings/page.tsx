@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AbstentionState, type Abstention } from "@/components/abstention";
 import { ReportLink } from "@/components/dialogs";
 import { CategoryPicker, EvidenceChecklist, type ChecklistRow } from "@/components/findings-extras";
 import { AuditBadge, Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote, ProvenanceTag } from "@/components/ui";
@@ -14,15 +15,16 @@ import { useRequireUser } from "@/lib/use-session";
 type Citation = { id: string; chunk_id: string; quote: string; verified: boolean; source_title: string;
   clause_ref: string | null; version: string; synthetic: boolean };
 type Point = { id: string; statement: string; provenance: "rule" | "ai"; target_id: string; citations: Citation[] };
-type Target = { id: string; audit_status: string | null; clause_cited_verbatim: string | null; counter_point_ids: string[] };
+type Target = { id: string; audit_status: string | null; clause_cited_verbatim: string | null; counter_point_ids: string[];
+  abstention: string | null };
 type Analysis = {
   id: string; status: string; mode: string; stale: boolean;
   summary: { claimed_paise: number | null; paid_paise: number | null; decision_type: string | null };
   wording: { title: string; version: string; synthetic: boolean } | null;
   line_items: (Target & { description: string; deducted_paise: number })[];
-  reasons: (Target & { text: string; category: string | null })[];
+  reasons: (Target & { text: string; category: string | null; user_entered: boolean })[];
   checklist: ChecklistRow[];
-  counter_points: Point[]; dropped_count: number;
+  counter_points: Point[]; dropped_count: number; abstentions: Abstention[];
 };
 type Chunk = { text: string; clause_ref: string | null; source: { title: string; version: string; synthetic: boolean } };
 type Progress = { jobs: { kind: string; ref_id: string; steps: { key: string; status: string }[] }[] };
@@ -144,6 +146,17 @@ export default function Findings() {
     setStarting(false);
   }
 
+  async function removeReason(reasonId: string) {
+    setStarting(true);
+    setError(null);
+    try {
+      await api(`/cases/${id}/reasons/${reasonId}`, { method: "DELETE" });
+      setTick((n) => n + 1);
+    } catch (e) { setError(e); }
+    setStarting(false);
+  }
+  const rerun = () => setTick((n) => n + 1);
+
   if (!me) return gate;
   const points = new Map((a?.counter_points ?? []).map((p) => [p.id, p]));
   const running = !!a && ACTIVE.includes(a.status);
@@ -153,6 +166,11 @@ export default function Findings() {
   const canWrite = done && !a!.stale && (a!.line_items.some((l) => CHALLENGEABLE.includes(l.audit_status ?? ""))
     || a!.reasons.some((r) => CHALLENGEABLE.includes(r.audit_status ?? "") || r.counter_point_ids.length > 0));
   const rejected = a?.summary.decision_type === "repudiation";
+  const caseGaps = a?.abstentions.filter((g) => !g.target_id) ?? [];
+  const itemGap = (target: string) => {
+    const g = a?.abstentions.find((x) => x.target_id === target);
+    return g ? <AbstentionState caseId={id} gap={g} inline onRerun={rerun} onRunAgain={run} busy={starting} /> : null;
+  };
 
   return (
     <div className="page">
@@ -166,11 +184,9 @@ export default function Findings() {
         </div>
       )}
       {none && <button className="btn btn-primary" disabled={starting} onClick={run}>{t("findings.run")}</button>}
-      {a?.status === "failed" && (
-        <Callout tone="error">{t("findings.failed")}{" "}
-          <button className="btn btn-secondary" disabled={starting} onClick={run}>{t("findings.runAgain")}</button>
-        </Callout>
-      )}
+      {a?.status === "failed" && a.abstentions.map((g) => (
+        <AbstentionState key={g.reason_code} caseId={id} gap={g} onRerun={rerun} onRunAgain={run} busy={starting} />
+      ))}
       {a && done && (
         <>
           {a.stale && (
@@ -178,7 +194,9 @@ export default function Findings() {
               <button className="btn btn-secondary" disabled={starting} onClick={run}>{t("findings.update")}</button>
             </Callout>
           )}
-          {a.mode === "limited" && <Callout tone="info">{t("findings.limited")}</Callout>}
+          {caseGaps.map((g) => (
+            <AbstentionState key={g.reason_code} caseId={id} gap={g} onRerun={rerun} onRunAgain={run} busy={starting} />
+          ))}
           <div className="card">
             {rejected && a.summary.claimed_paise !== null && (
               <p style={{ fontSize: 18 }}>{t("findings.rejectionSummary", { claimed: formatInr(a.summary.claimed_paise) })}</p>
@@ -202,7 +220,11 @@ export default function Findings() {
           {a.reasons.map((r) => (
             <div className="card" key={r.id}>
               <p className="quote">“{r.text}”</p>
-              <AuditBadge status={r.audit_status ?? "PENDING"} />
+              <AuditBadge status={r.audit_status ?? "PENDING"} />{" "}
+              {r.user_entered && <><ProvenanceTag kind="user" />{" "}
+                <button type="button" className="btn btn-ghost" disabled={starting} onClick={() => removeReason(r.id)}>
+                  {t("abstain.removeTyped")}</button></>}
+              {itemGap(r.id)}
               <Points ids={r.counter_point_ids} points={points} onOpen={setOpen} caseId={id} />
               <CategoryPicker caseId={id} reasonId={r.id} current={r.category} onRerun={() => setTick((n) => n + 1)} />
             </div>
@@ -215,7 +237,8 @@ export default function Findings() {
                 <span className="amount">{formatInr(l.deducted_paise)}</span>
               </div>
               <AuditBadge status={l.audit_status ?? "PENDING"} />
-              {l.audit_status === "CANNOT_ASSESS" && <p className="muted">{t("findings.cannotAssessHelp")}</p>}
+              {l.abstention ? itemGap(l.id)
+                : l.audit_status === "CANNOT_ASSESS" && <p className="muted">{t("findings.cannotAssessHelp")}</p>}
               <Points ids={l.counter_point_ids} points={points} onOpen={setOpen} caseId={id} />
             </div>
           ))}

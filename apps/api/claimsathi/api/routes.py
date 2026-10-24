@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from claimsathi.analysis.service import analysis_view, start_analysis
+from claimsathi.analysis.service import analysis_view, ensure_ready, start_analysis
 from claimsathi.api.deps import (
     consented_user,
     csrf,
@@ -471,6 +471,48 @@ def patch_reason_category(
     if reason is None:
         raise not_found()
     reason.category, reason.category_source = body.category, "user"
+    a = start_analysis(s, case)
+    _after_commit(bg, c)
+    return {"analysis_id": str(a.id)}
+
+
+class TypedReasonIn(_In):
+    text: str = Field(min_length=1, max_length=500)
+    clause_cited: str | None = Field(default=None, max_length=200)
+
+
+@router.post("/cases/{case_id}/reasons", status_code=202)
+def post_typed_reason(
+    body: TypedReasonIn,
+    bg: BackgroundTasks,
+    case: Case = Depends(owned_case),
+    s: Session = Depends(db),
+    c: AppContext = Depends(ctx),
+) -> dict[str, Any]:
+    """FR-019 recovery "type the reason yourself": stored verbatim as a confirmed field; the findings are checked
+    again."""
+    ensure_ready(s, case)
+    reason = facts.add_typed_reason(s, case, text=body.text, clause_cited=body.clause_cited)
+    a = start_analysis(s, case)
+    _after_commit(bg, c)
+    return {"reason_id": str(reason.id), "analysis_id": str(a.id)}
+
+
+@router.delete("/cases/{case_id}/reasons/{reason_id}", status_code=202)
+def delete_typed_reason(
+    reason_id: uuid.UUID,
+    bg: BackgroundTasks,
+    case: Case = Depends(owned_case),
+    s: Session = Depends(db),
+    c: AppContext = Depends(ctx),
+) -> dict[str, Any]:
+    from claimsathi.models import DecisionReason
+
+    reason = s.scalar(select(DecisionReason).where(DecisionReason.id == reason_id, DecisionReason.case_id == case.id))
+    if reason is None:
+        raise not_found()
+    ensure_ready(s, case)
+    facts.remove_typed_reason(s, case, reason)
     a = start_analysis(s, case)
     _after_commit(bg, c)
     return {"analysis_id": str(a.id)}
