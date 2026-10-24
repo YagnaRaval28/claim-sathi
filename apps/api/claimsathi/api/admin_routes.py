@@ -408,7 +408,6 @@ def admin_disable_rule(
 @router.get("/accuracy-audits")
 def admin_accuracy_audits(admin: AdminUser = Depends(any_admin), s: Session = Depends(db)) -> dict[str, Any]:
     from claimsathi.admin import accuracy
-
     from claimsathi.core.clock import today_ist
 
     return {
