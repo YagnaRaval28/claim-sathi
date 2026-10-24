@@ -26,11 +26,22 @@ export function LetterEditor({ letter, onSaved, onDone }: {
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<unknown>(null);
   const version = useRef(letter.version);
+  // Saves run one at a time and always send the newest blocks: a blur save can still be in flight when the user
+  // undoes or types, and those later changes must not be marked saved (or sent with a stale version).
+  const latest = useRef(blocks);
+  const revision = useRef(0);
+  const savedRevision = useRef(0);
+  const inFlight = useRef<Promise<boolean> | null>(null);
 
-  const change = (next: EditBlock[]) => {
-    setHistory((h) => [...h.slice(-49), blocks]);
+  const update = (next: EditBlock[]) => {
+    latest.current = next;
+    revision.current += 1;
     setBlocks(next);
     setDirty(true);
+  };
+  const change = (next: EditBlock[]) => {
+    setHistory((h) => [...h.slice(-49), blocks]);
+    update(next);
   };
   const setText = (i: number, text: string) => change(blocks.map((b, n) => (n === i ? { ...b, text } : b)));
   const setItem = (i: number, j: number, text: string) =>
@@ -41,37 +52,49 @@ export function LetterEditor({ letter, onSaved, onDone }: {
     const prev = history.at(-1);
     if (!prev) return;
     setHistory((h) => h.slice(0, -1));
-    setBlocks(prev);
-    setDirty(true);
+    update(prev);
   };
   const verified = (b: EditBlock) =>
     b.type === "quote" && !!b.citation_id && originals.get(b.citation_id) === b.text;
 
-  const save = useCallback(async () => {
-    if (!dirty) return;
-    setStatus("saving");
-    setError(null);
-    try {
-      const out = await api<Letter>(`/letters/${letter.id}`, { method: "PATCH",
-        body: { base_version: version.current, blocks } });
-      version.current = out.version;
-      setDirty(false);
-      setStatus("saved");
-      onSaved(out);
-    } catch (e) {
-      setStatus("idle");
-      setError(e);
-      if (e instanceof ApiError && e.problem.code === "version_conflict" && e.problem.current_version !== undefined) {
-        version.current = e.problem.current_version;
+  const save = useCallback(async (): Promise<boolean> => {
+    while (inFlight.current) await inFlight.current;
+    if (revision.current === savedRevision.current) return true;
+    const target = revision.current;
+    const run = (async () => {
+      setStatus("saving");
+      setError(null);
+      try {
+        const out = await api<Letter>(`/letters/${letter.id}`, { method: "PATCH",
+          body: { base_version: version.current, blocks: latest.current } });
+        version.current = out.version;
+        savedRevision.current = target;
+        setDirty(revision.current !== target);
+        setStatus("saved");
+        onSaved(out);
+        return true;
+      } catch (e) {
+        setStatus("idle");
+        setError(e);
+        if (e instanceof ApiError && e.problem.code === "version_conflict" && e.problem.current_version !== undefined) {
+          version.current = e.problem.current_version;
+        }
+        return false;
       }
+    })();
+    inFlight.current = run;
+    try {
+      return await run;
+    } finally {
+      if (inFlight.current === run) inFlight.current = null;
     }
-  }, [blocks, dirty, letter.id, onSaved]);
+  }, [letter.id, onSaved]);
 
   useEffect(() => {
     if (!dirty) return;
     const h = setTimeout(() => void save(), AUTOSAVE_MS);
     return () => clearTimeout(h);
-  }, [dirty, save]);
+  }, [dirty, status, save]);
 
   return (
     <div className="paper" lang="en">
@@ -81,7 +104,7 @@ export function LetterEditor({ letter, onSaved, onDone }: {
         </span>
         <span>
           <button type="button" className="btn btn-ghost" onClick={undo} disabled={!history.length}>{t("letter.undo")}</button>{" "}
-          <button type="button" className="btn btn-primary" onClick={async () => { await save(); onDone(); }}>
+          <button type="button" className="btn btn-primary" onClick={async () => { if (await save()) onDone(); }}>
             {t("letter.doneEditing")}
           </button>
         </span>

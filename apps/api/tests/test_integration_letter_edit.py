@@ -12,6 +12,7 @@ from httpx import Response
 from claimsathi.context import AppContext
 from claimsathi.letters.render import letter_html
 from tests.conftest import sign_in
+from tests.test_integration_rules_checklist import _rejected_case
 from tests.test_integration_vs1 import _to_findings
 
 pytestmark = pytest.mark.integration
@@ -61,6 +62,25 @@ def test_editing_a_quote_removes_the_badge_and_undo_restores_it(client: TestClie
     r = _patch(client, h, edited, original)  # AC2: undo puts the generated quote back
     restored = r.json()
     assert restored["doc"]["blocks"][i]["type"] == "quote" and len(restored["doc"]["footnotes"]) == 1
+
+
+@pytest.mark.req("FR-027")
+def test_undo_restores_one_of_several_quotes_after_a_save(client: TestClient, ctx: AppContext) -> None:
+    # SYN-002 (full rejection) has two verified quotes: Para 17(b) and Para 17(a). The editor saves on blur, so the
+    # edited version is stored before undo; the restored quote must still find its footnote.
+    h, cid = _rejected_case(client, ctx, "two-quotes@example.com")
+    r = client.post(f"/api/v1/cases/{cid}/letters", json={}, headers={**h, "Idempotency-Key": str(uuid.uuid4())})
+    letter = r.json()
+    original = [dict(b) for b in letter["doc"]["blocks"]]
+    quotes = [n for n, b in enumerate(original) if b["type"] == "quote"]
+    assert len(quotes) == 2
+    changed = [dict(b) for b in original]
+    changed[quotes[0]] = {**changed[quotes[0]], "text": "The applicable rule states something else."}
+    edited = _patch(client, h, letter, changed).json()
+    assert [n["clause_ref"] for n in edited["doc"]["footnotes"]] == ["Para 17(a)"]
+    restored = _patch(client, h, edited, original).json()
+    assert [b["type"] for b in restored["doc"]["blocks"]].count("quote") == 2
+    assert [(n["n"], n["clause_ref"]) for n in restored["doc"]["footnotes"]] == [(1, "Para 17(b)"), (2, "Para 17(a)")]
 
 
 def test_a_forged_quote_is_never_verified(client: TestClient, ctx: AppContext) -> None:

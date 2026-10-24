@@ -504,9 +504,13 @@ def edit_letter(s: Session, letter: Letter, case: Case, base_version: int, block
     if not blocks or len(blocks) > MAX_BLOCKS:
         raise AppError("validation_error", 422, "The letter needs at least one paragraph.")
     originals = _original_quotes(letter)
-    notes_by_citation = {n["citation_id"]: n for n in letter.doc.get("footnotes", []) if n.get("citation_id")}
-    if not notes_by_citation:
-        notes_by_citation = {n["citation_id"]: n for n in letter.included.get("footnotes", []) if n.get("citation_id")}
+    # Every footnote the letter was generated with, not only the ones still shown: after a quote is edited away its
+    # footnote leaves `doc`, and undo must still find it (kept in `included` from the first edit on).
+    notes_by_citation = {
+        n["citation_id"]: n
+        for n in [*letter.doc.get("footnotes", []), *letter.included.get("footnotes", [])]
+        if n.get("citation_id")
+    }
     out: list[dict[str, Any]] = []
     footnotes: list[dict[str, Any]] = []
     for b in blocks:

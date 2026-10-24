@@ -12,11 +12,14 @@ test("letter editor: protected quote, undo, added paragraph saved", async ({ pag
   await page.getByRole("button", { name: "Edit letter" }).click();
 
   const quote = page.locator("textarea").filter({ hasText: "The applicable rule states" });
-  await expect(page.locator(".pill-verified:visible")).toHaveCount(1);
-  await quote.fill("The applicable rule states something else entirely.");
+  // SYN-002 is a full rejection: no clause cited (MC Para 17(b)) and no review-committee approval (Para 13).
+  const badges = page.locator(".pill-verified:visible");
+  await expect(badges).toHaveCount(2);
+  await quote.first().fill("The applicable rule states something else entirely.");
   await expect(page.getByText("This is no longer a verified quote")).toBeVisible();
+  await expect(badges).toHaveCount(1);
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".pill-verified:visible")).toHaveCount(1);
+  await expect(badges).toHaveCount(2);
 
   await page.getByRole("button", { name: "+ Add paragraph" }).first().click();
   const fresh = page.locator("textarea").nth(1);
@@ -25,7 +28,7 @@ test("letter editor: protected quote, undo, added paragraph saved", async ({ pag
 
   const paper = page.locator("article.paper:visible");
   await expect(paper).toContainText("I have held this policy for six years.");
-  await expect(paper.locator("blockquote sup")).toHaveText("[1]");
+  await expect(paper.locator("blockquote sup")).toHaveText(["[1]", "[2]"]);
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.locator("article.paper:visible")).toContainText("I have held this policy for six years.");
 });
