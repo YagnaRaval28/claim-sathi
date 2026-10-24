@@ -6,27 +6,59 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export type Block = { type: string; text?: string; items?: string[]; footnote?: number };
+export type LetterDoc = { blocks: Block[]; footnotes: { n: number; source_title: string; clause_ref: string | null;
+  version: string; synthetic: boolean }[]; disclaimer: string };
+export type LetterLanguage = "en" | "gu" | "hi";
 export type Letter = {
-  id: string; stage: "S1" | "S3"; version: number; reviewed_version: number | null; stale: boolean;
-  doc: { blocks: Block[]; footnotes: { n: number; source_title: string; clause_ref: string | null; version: string;
-    synthetic: boolean }[]; disclaimer: string };
+  id: string; stage: "S1" | "S3"; language: LetterLanguage; version: number; reviewed_version: number | null;
+  stale: boolean; doc: LetterDoc & { english?: LetterDoc };
 };
+/** Language names are shown in their own script in every locale. */
+export const LETTER_LANGUAGES: [LetterLanguage, string][] = [["en", "English"], ["gu", "ગુજરાતી"], ["hi", "हिन्दी"]];
 
-/** Plain text of the letter, for "Copy as email text" (FR-028). Footnotes are kept as numbered sources. */
-export function letterPlainText(letter: Letter, syntheticLabel: string): string {
-  const body = letter.doc.blocks.map((b) => (b.type === "list" ? (b.items ?? []).join("\n")
+function docPlainText(doc: LetterDoc, syntheticLabel: string): string {
+  const body = doc.blocks.map((b) => (b.type === "list" ? (b.items ?? []).join("\n")
     : b.type === "quote" ? `${b.text} [${b.footnote}]` : b.text ?? "")).join("\n\n");
-  const notes = letter.doc.footnotes.map((n) =>
+  const notes = doc.footnotes.map((n) =>
     `[${n.n}] ${n.source_title}, ${n.clause_ref ?? ""}, v${n.version}${n.synthetic ? ` ${syntheticLabel}` : ""}`);
-  return [body, notes.join("\n"), letter.doc.disclaimer].filter(Boolean).join("\n\n");
+  return [body, notes.join("\n"), doc.disclaimer].filter(Boolean).join("\n\n");
 }
 
-/** The letter as paper. Grounds and verified quotes carry a "Something's wrong?" control (FR-035). */
+/** Plain text of the letter, for "Copy as email text" (FR-028), followed by its English copy (FR-024). */
+export function letterPlainText(letter: Letter, syntheticLabel: string, englishTitle: string): string {
+  const copy = letter.doc.english;
+  return [docPlainText(letter.doc, syntheticLabel), copy && `${englishTitle}\n\n${docPlainText(copy, syntheticLabel)}`]
+    .filter(Boolean).join("\n\n---\n\n");
+}
+
+/** The letter as paper, then its English copy when the letter is in Gujarati or Hindi (FR-024). */
 export function LetterPaper({ caseId, letter }: { caseId: string; letter: Letter }) {
   const { t } = useI18n();
+  const copy = letter.doc.english;
   return (
-    <article className="paper" lang="en">
-      {letter.doc.blocks.map((b, i) => (
+    <>
+      <article className="paper" lang={letter.language}>
+        <PaperBody caseId={caseId} letterId={letter.id} doc={letter.doc} reportable />
+      </article>
+      {copy && (
+        <details className="english-copy">
+          <summary>{t("letter.englishCopy")}</summary>
+          <p className="muted">{t("letter.englishCopyNote")}</p>
+          <article className="paper" lang="en"><PaperBody caseId={caseId} letterId={letter.id} doc={copy} /></article>
+        </details>
+      )}
+    </>
+  );
+}
+
+/** Grounds and verified quotes carry a "Something's wrong?" control (FR-035). */
+function PaperBody({ caseId, letterId, doc, reportable = false }: {
+  caseId: string; letterId: string; doc: LetterDoc; reportable?: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <>
+      {doc.blocks.map((b, i) => (
         <div key={i}>
           {b.type === "list" ? (
             <ul style={{ listStyle: "none", paddingLeft: 16 }}>{b.items!.map((x) => <li key={x}>{x}</li>)}</ul>
@@ -37,18 +69,18 @@ export function LetterPaper({ caseId, letter }: { caseId: string; letter: Letter
           ) : (
             <p style={b.type === "subject" ? { fontWeight: 600 } : undefined}>{b.text}</p>
           )}
-          {b.type === "quote" || (b.type === "para" && /^\d+\./.test(b.text ?? "")) ? (
-            <ReportLink caseId={caseId} targetType="letter_block" targetId={letter.id} blockIndex={i} />
+          {reportable && (b.type === "quote" || (b.type === "para" && /^\d+\./.test(b.text ?? ""))) ? (
+            <ReportLink caseId={caseId} targetType="letter_block" targetId={letterId} blockIndex={i} />
           ) : null}
         </div>
       ))}
       <hr />
-      {letter.doc.footnotes.map((n) => (
+      {doc.footnotes.map((n) => (
         <p key={n.n} style={{ fontSize: 14 }}>[{n.n}] {n.source_title}, {n.clause_ref}, v{n.version}
           {n.synthetic && ` ${t("letter.syntheticSource")}`}</p>
       ))}
-      <p className="muted">{letter.doc.disclaimer}</p>
-    </article>
+      <p className="muted">{doc.disclaimer}</p>
+    </>
   );
 }
 
@@ -77,7 +109,7 @@ export function LetterActions({ letter, onChange, onError }: {
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(letterPlainText(letter, t("letter.syntheticSource")));
+      await navigator.clipboard.writeText(letterPlainText(letter, t("letter.syntheticSource"), t("letter.englishCopy")));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

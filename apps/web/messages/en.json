@@ -284,7 +284,11 @@
     "unverified": "This is no longer a verified quote",
     "editedNote": "Edited by you · not verified",
     "paragraph": "Paragraph",
-    "downloadDocx": "Download Word (.docx)"
+    "downloadDocx": "Download Word (.docx)",
+    "language": "Letter language",
+    "languageHelp": "The English copy is included below the letter and in the download, because insurers and the Ombudsman work in English.",
+    "englishCopy": "English copy",
+    "englishCopyNote": "This is the English version we generated. Your edits change only the letter above."
   },
   "errors": {
     "network": "Couldn't reach ClaimSathi. Check your connection and try again.",

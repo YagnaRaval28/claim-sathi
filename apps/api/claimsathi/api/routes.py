@@ -574,7 +574,7 @@ def get_chunk(chunk_id: uuid.UUID, case: Case = Depends(owned_case), s: Session 
 
 class LetterIn(_In):
     stage: Literal["S1"] = "S1"
-    language: Literal["en"] = "en"
+    language: Lang = "en"
     basic_mode: Literal[True] = True
     line_item_ids: list[uuid.UUID] | None = None
 
@@ -593,7 +593,7 @@ def post_letter(
     if replay:  # same letter, but its *current* state (review status, staleness)
         existing, _ = owned_letter(s, uuid.UUID(replay[1]["id"]), user.id)
         return JSONResponse(letter_view(s, existing, case), status_code=replay[0])
-    letter = create_basic_letter(c, s, case, body.line_item_ids)
+    letter = create_basic_letter(c, s, case, body.line_item_ids, body.language)
     out = letter_view(s, letter, case)
     idempotent_store(s, user.id, idem or "", payload, 201, out)
     s.commit()

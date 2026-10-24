@@ -21,10 +21,12 @@ sup { font-size: 8pt; }
 ol, ul { padding-left: 16pt; list-style: none; }
 .footnotes { margin-top: 18pt; border-top: 0.5pt solid #D8D4CB; padding-top: 6pt; font-size: 9pt; }
 .disclaimer { margin-top: 10pt; font-size: 8.5pt; color: #5F6A67; }
+.english-copy { break-before: page; }
+.english-copy h2 { font-size: 12pt; margin: 0 0 12pt; }
 """
 
 
-def letter_html(doc: dict[str, Any]) -> str:
+def _body_html(doc: dict[str, Any]) -> str:
     parts: list[str] = []
     for b in doc["blocks"]:
         t = b["type"]
@@ -46,9 +48,22 @@ def letter_html(doc: dict[str, Any]) -> str:
         for n in doc.get("footnotes", [])
     )
     return (
-        f"<!doctype html><html lang='en'><head><meta charset='utf-8'><style>{CSS}</style></head><body>"
         f"{''.join(parts)}<div class='footnotes'>{notes}</div>"
-        f"<p class='disclaimer'>{escape(doc.get('disclaimer', ''))}</p></body></html>"
+        f"<p class='disclaimer'>{escape(doc.get('disclaimer', ''))}</p>"
+    )
+
+
+def letter_html(doc: dict[str, Any], language: str = "en", english_title: str = "English copy") -> str:
+    """The letter, then (FR-024) its English copy on a new page when the letter is in Gujarati or Hindi."""
+    copy = doc.get("english")
+    tail = (
+        f"<section lang='en' class='english-copy'><h2>{escape(english_title)}</h2>{_body_html(copy)}</section>"
+        if copy
+        else ""
+    )
+    return (
+        f"<!doctype html><html lang='{escape(language)}'><head><meta charset='utf-8'><style>{CSS}</style></head>"
+        f"<body>{_body_html(doc)}{tail}</body></html>"
     )
 
 
@@ -56,17 +71,17 @@ class RendererUnavailable(RuntimeError):
     """WeasyPrint's native libraries (Pango/GObject) are missing, e.g. native Windows without GTK."""
 
 
-def render_pdf(doc: dict[str, Any]) -> bytes:
+def render_pdf(doc: dict[str, Any], language: str = "en", english_title: str = "English copy") -> bytes:
     try:
         from weasyprint import HTML
     except OSError as exc:  # raised when libgobject/libpango cannot be loaded
         raise RendererUnavailable(type(exc).__name__) from exc
 
-    pdf: bytes = HTML(string=letter_html(doc)).write_pdf()
+    pdf: bytes = HTML(string=letter_html(doc, language, english_title)).write_pdf()
     return pdf
 
 
-def render_docx(doc: dict[str, Any]) -> bytes:
+def render_docx(doc: dict[str, Any], english_title: str = "English copy") -> bytes:
     """FR-028 DOCX: A4, Noto Serif (Gujarati/Devanagari fall back to the Noto Serif families), citation markers
     in the text and a numbered Sources list (python-docx cannot write native Word footnotes)."""
     import io
@@ -84,6 +99,22 @@ def render_docx(doc: dict[str, Any]) -> bytes:
     style = d.styles["Normal"]
     style.font.name = "Noto Serif"
     style.font.size = Pt(11.5)
+    _docx_body(d, doc)
+    copy = doc.get("english")
+    if copy:  # FR-024: the English copy follows on a new page
+        from docx.enum.text import WD_BREAK
+
+        d.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+        d.add_paragraph().add_run(english_title).bold = True
+        _docx_body(d, copy)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def _docx_body(d: Any, doc: dict[str, Any]) -> None:
+    from docx.shared import Mm, Pt
+
     for b in doc["blocks"]:
         t = b["type"]
         if t == "list":
@@ -114,6 +145,3 @@ def render_docx(doc: dict[str, Any]) -> bytes:
     disclaimer = d.add_paragraph()
     run = disclaimer.add_run(str(doc.get("disclaimer", "")))
     run.font.size = Pt(8.5)
-    buf = io.BytesIO()
-    d.save(buf)
-    return buf.getvalue()

@@ -19,6 +19,7 @@ from claimsathi.context import AppContext
 from claimsathi.core.clock import today_ist
 from claimsathi.core.errors import AppError
 from claimsathi.core.values import format_date_dmy, format_inr
+from claimsathi.letters.phrases import EVIDENCE_LABELS, LETTER_LANGUAGES, PHRASES, RULE_GROUNDS
 from claimsathi.models import (
     Analysis,
     Case,
@@ -34,9 +35,7 @@ from claimsathi.models import (
 )
 from claimsathi.verify.numbers import tokens, ungrounded
 
-DISCLAIMER = (
-    "Prepared with ClaimSathi, a self-help drafting tool. This is not legal advice. You send this letter yourself."
-)
+DISCLAIMER = PHRASES["en"]["disclaimer"]
 
 
 def _facts(c: AppContext, s: Session, case: Case) -> dict[str, str | None]:
@@ -173,7 +172,7 @@ def _gather(c: AppContext, s: Session, case: Case, include_ids: list[uuid.UUID] 
     )
 
 
-def _quote_block(cit: Any, ch: Any, src: Any, n: int) -> tuple[dict[str, Any], dict[str, Any]]:
+def _quote_block(cit: Any, ch: Any, src: Any, n: int, lang: str = "en") -> tuple[dict[str, Any], dict[str, Any]]:
     note = {
         "n": n,
         "citation_id": str(cit.id),
@@ -185,7 +184,7 @@ def _quote_block(cit: Any, ch: Any, src: Any, n: int) -> tuple[dict[str, Any], d
     }
     block = {
         "type": "quote",
-        "text": f"The applicable rule states: “{cit.quote}”",
+        "text": PHRASES[lang]["quote"].format(quote=cit.quote),
         "footnote": n,
         "quote": cit.quote,
         "citation_id": str(cit.id),
@@ -194,40 +193,27 @@ def _quote_block(cit: Any, ch: Any, src: Any, n: int) -> tuple[dict[str, Any], d
 
 
 def _grounds(
-    m: _Material, *, insurer_ref: str, to_insurer: bool = True
+    m: _Material, *, insurer_ref: str, to_insurer: bool = True, lang: str = "en"
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Numbered grounds: the NO_CLAUSE_CITED groups (Para 17(b) quote), then one per rule finding, each with its
-    own verified quote and footnote."""
+    own verified quote and footnote. Gujarati and Hindi exist for the Stage-1 letter only (to the insurer)."""
+    p = PHRASES[lang]
+    ref = {"ref": insurer_ref, "Ref": insurer_ref[0].upper() + insurer_ref[1:]}
     blocks: list[dict[str, Any]] = []
     footnotes: list[dict[str, Any]] = []
     n = 0
     if m.chosen:
         n += 1
         item_list = "; ".join(f"{i.description} ({format_inr(i.deducted_paise)})" for i in m.chosen)
-        blocks.append(
-            {
-                "type": "para",
-                "text": (
-                    f"{n}. For the following deductions, {insurer_ref} does not cite a specific term or condition of "
-                    f"my policy: {item_list}. The total of these deductions is {format_inr(m.total)}."
-                ),
-            }
-        )
+        text = p["ground_deductions"].format(n=n, items=item_list, total=format_inr(m.total), **ref)
+        blocks.append({"type": "para", "text": text})
     if m.reasons:
         n += 1
         quoted = "; ".join(f"“{r.text_verbatim}”" for r in m.reasons)
-        blocks.append(
-            {
-                "type": "para",
-                "text": (
-                    f"{n}. {insurer_ref[0].upper()}{insurer_ref[1:]} gives the following reason for its decision but "
-                    f"does not cite a specific term or condition of my policy: {quoted}."
-                ),
-            }
-        )
+        blocks.append({"type": "para", "text": p["ground_reasons"].format(n=n, quoted=quoted, **ref)})
     mc01 = next((row for row in m.cited if row[3].rule_key == "RULE-MC-01"), None)
     if mc01 is not None and (m.chosen or m.reasons):
-        block, note = _quote_block(mc01[0], mc01[1], mc01[2], len(footnotes) + 1)
+        block, note = _quote_block(mc01[0], mc01[1], mc01[2], len(footnotes) + 1, lang)
         blocks.append(block)
         footnotes.append(note)
     done: set[str] = set()
@@ -236,9 +222,12 @@ def _grounds(
             continue  # one paragraph per rule, even when several reasons trigger it
         done.add(cp.rule_key)
         n += 1
-        text = RULE_GROUND_TEXT[cp.rule_key][0 if to_insurer else 1]
+        if lang == "en":
+            text = RULE_GROUND_TEXT[cp.rule_key][0 if to_insurer else 1]
+        else:
+            text = RULE_GROUNDS[lang][cp.rule_key]
         blocks.append({"type": "para", "text": f"{n}. {text}"})
-        block, note = _quote_block(cit, ch, src, len(footnotes) + 1)
+        block, note = _quote_block(cit, ch, src, len(footnotes) + 1, lang)
         blocks.append(block)
         footnotes.append(note)
     return blocks, footnotes
@@ -256,55 +245,77 @@ def _facts_sentence(m: _Material, *, by: str) -> str:
     return txt + "."
 
 
-def create_basic_letter(c: AppContext, s: Session, case: Case, include_ids: list[uuid.UUID] | None) -> Letter:
-    m = _gather(c, s, case, include_ids)
-    what = "the rejection of" if m.rejected else "deductions in"
+def _s1_facts(m: _Material, p: dict[str, str]) -> str:
+    kind = "rejected" if m.rejected else "settled"
+    if m.decision_date:
+        txt = p[f"facts_{kind}_dated"].format(claim=m.claim_no, date=format_date_dmy(m.decision_date))
+    else:
+        txt = p[f"facts_{kind}"].format(claim=m.claim_no)
+    claimed, paid = m.f.get("claimed_paise"), m.f.get("paid_paise")
+    if claimed and paid and not m.rejected:
+        txt += " " + p["amounts_both"].format(claimed=format_inr(int(claimed)), paid=format_inr(int(paid)))
+    elif claimed:
+        txt += " " + p["amount_claimed"].format(claimed=format_inr(int(claimed)))
+    return txt
+
+
+def _s1_blocks(m: _Material, lang: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    p = PHRASES[lang]
+    ids = {"claim": m.claim_no, "policy": m.policy_no}
     blocks: list[dict[str, Any]] = [
-        {"type": "meta", "text": f"Date: {format_date_dmy(today_ist())}"},
-        {"type": "meta", "text": f"To: The Grievance Redressal Officer, {m.insurer}"},
-        {
-            "type": "subject",
-            "text": f"Subject: Request to review {what} claim {m.claim_no} under policy {m.policy_no}",
-        },
-        {"type": "para", "text": "Dear Sir or Madam,"},
-        {"type": "para", "text": _facts_sentence(m, by="your letter")},
+        {"type": "meta", "text": p["date"].format(date=format_date_dmy(today_ist()))},
+        {"type": "meta", "text": p["to"].format(insurer=m.insurer)},
+        {"type": "subject", "text": p["subject_rejected" if m.rejected else "subject_partial"].format(**ids)},
+        {"type": "para", "text": p["salutation"]},
+        {"type": "para", "text": _s1_facts(m, p)},
     ]
-    grounds, footnotes = _grounds(m, insurer_ref="your letter")
+    grounds, footnotes = _grounds(m, insurer_ref="your letter", lang=lang)
     blocks += grounds
-    first = (
-        "(a) reconsider your decision and settle my claim;"
-        if m.rejected
-        else f"(a) reconsider these deductions and pay {format_inr(m.total)};"
-    )
-    each = "reason for rejection" if m.rejected and not m.chosen else "deduction"
-    requests = [first, f"(b) state, for each {each}, the specific term or condition of the policy relied on;"]
+    requests = [
+        p["req_a_rejected"] if m.rejected else p["req_a_partial"].format(total=format_inr(m.total)),
+        p["req_b_reason" if m.rejected and not m.chosen else "req_b_deduction"],
+    ]
     if m.asks_committee:
-        requests.append("(c) confirm that your claims review committee approved the rejection;")
-    requests.append(f"({'d' if m.asks_committee else 'c'}) reply to me in writing.")
-    enclosures = ["a copy of your decision letter", *(EVIDENCE_LABELS_EN[k] for k in m.enclosures)]
+        requests.append(p["req_c_committee"])
+    requests.append(p["req_reply"])
+    labels = p["labels"].split()
+    labels_en = EVIDENCE_LABELS_EN if lang == "en" else EVIDENCE_LABELS[lang]
+    enclosures = [p["enc_decision"], *(labels_en[k] for k in m.enclosures)]
     blocks += [
-        {"type": "para", "text": "I therefore request that you:"},
-        {"type": "list", "items": requests},
-        {"type": "para", "text": "Enclosures: " + "; ".join(enclosures) + "."},
-        {"type": "para", "text": "Yours faithfully,"},
+        {"type": "para", "text": p["request_intro"]},
+        {"type": "list", "items": [f"({label}) {r}" for label, r in zip(labels, requests, strict=False)]},
+        {"type": "para", "text": p["enclosures"].format(items="; ".join(enclosures))},
+        {"type": "para", "text": p["closing"]},
         {"type": "signature", "text": m.name},
     ]
-    _check_numbers(
-        blocks,
-        m.f,
-        m.cited,
-        chosen=m.chosen,
-        total=m.total,
-        extra={m.claim_no, m.policy_no, format_date_dmy(today_ist()), *(r.text_verbatim for r in m.reasons)},
-    )
+    return blocks, footnotes
+
+
+def create_basic_letter(
+    c: AppContext, s: Session, case: Case, include_ids: list[uuid.UUID] | None, language: str = "en"
+) -> Letter:
+    """FR-024: the letter in the chosen language. A non-English letter always carries the English copy (OQ-03
+    default), generated from the same confirmed facts and verified quotes."""
+    if language not in LETTER_LANGUAGES:
+        raise AppError("validation_error", 422, "Choose English, Gujarati or Hindi.")
+    m = _gather(c, s, case, include_ids)
+    extra = {m.claim_no, m.policy_no, format_date_dmy(today_ist()), *(r.text_verbatim for r in m.reasons)}
+    copies = {lang: _s1_blocks(m, lang) for lang in dict.fromkeys(("en", language))}
+    for blocks, _ in copies.values():
+        _check_numbers(blocks, m.f, m.cited, chosen=m.chosen, total=m.total, extra=extra)
+    blocks, footnotes = copies[language]
+    doc: dict[str, Any] = {"blocks": blocks, "footnotes": footnotes, "disclaimer": PHRASES[language]["disclaimer"]}
+    if language != "en":
+        en_blocks, en_notes = copies["en"]
+        doc["english"] = {"blocks": en_blocks, "footnotes": en_notes, "disclaimer": DISCLAIMER}
     letter = Letter(
         case_id=case.id,
         analysis_id=m.analysis.id,
         stage="S1",
-        language="en",
+        language=language,
         basic_mode=True,
         included={"line_item_ids": [str(i.id) for i in m.chosen], "reason_ids": [str(r.id) for r in m.reasons]},
-        doc={"blocks": blocks, "footnotes": footnotes, "disclaimer": DISCLAIMER},
+        doc=doc,
         version=1,
     )
     s.add(letter)
@@ -610,10 +621,10 @@ def export_letter(c: AppContext, s: Session, letter: Letter, case: Case, fmt: st
     from claimsathi.letters.render import RendererUnavailable, render_docx, render_pdf
 
     if fmt == "docx":
-        data = render_docx(letter.doc)
+        data = render_docx(letter.doc, PHRASES[letter.language]["english_copy"])
     else:
         try:
-            data = render_pdf(letter.doc)
+            data = render_pdf(letter.doc, letter.language, PHRASES[letter.language]["english_copy"])
         except RendererUnavailable as exc:
             raise AppError("export_unavailable", 503, "PDF download isn't available on this server right now.") from exc
     key = f"cases/{case.id}/letters/{letter.id}/v{letter.version}.{fmt}"

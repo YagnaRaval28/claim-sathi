@@ -4,28 +4,31 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LetterEditor } from "@/components/letter-editor";
-import { LetterActions, LetterPaper, type Letter } from "@/components/letter-paper";
+import { LETTER_LANGUAGES, LetterActions, LetterPaper, type Letter, type LetterLanguage } from "@/components/letter-paper";
 import { Callout, CaseSteps, Disclaimer, PageTitle, ProblemNote } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useRequireUser } from "@/lib/use-session";
 
 export default function LetterPage() {
-  const { t, href } = useI18n();
+  const { t, href, lang } = useI18n();
   const { id } = useParams<{ id: string }>();
   const { me, gate } = useRequireUser();
   const [letter, setLetter] = useState<Letter | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [editing, setEditing] = useState(false);
+  // FR-024: the letter language is chosen per letter; it starts as the language the app is shown in.
+  const [letterLang, setLetterLang] = useState<LetterLanguage>(lang);
 
   useEffect(() => {
     if (!me) return;
-    // One letter per analysis: the idempotency key replays the same letter on revisit.
+    // One letter per analysis and language: the idempotency key replays the same letter on revisit.
     api<{ id: string }>(`/cases/${id}/analyses/latest`)
-      .then((a) => api<Letter>(`/cases/${id}/letters`, { body: {}, idempotencyKey: `letter-${a.id}` }))
+      .then((a) => api<Letter>(`/cases/${id}/letters`, { body: { language: letterLang },
+        idempotencyKey: `letter-${a.id}-${letterLang}` }))
       .then(setLetter)
       .catch(setError);
-  }, [me, id]);
+  }, [me, id, letterLang]);
 
   if (!me) return gate;
   const stale = letter?.stale || (error instanceof ApiError && error.problem.code === "case_stale");
@@ -43,6 +46,16 @@ export default function LetterPage() {
       {letter && (
         <>
           <Callout tone="info">{t("letter.basic")}</Callout>
+          {!editing && (
+            <div className="field">
+              <label htmlFor="letter-lang">{t("letter.language")}</label>
+              <select id="letter-lang" className="input" style={{ width: "auto" }} value={letterLang}
+                      onChange={(e) => { setLetter(null); setError(null); setLetterLang(e.target.value as LetterLanguage); }}>
+                {LETTER_LANGUAGES.map(([code, name]) => <option key={code} value={code} lang={code}>{name}</option>)}
+              </select>
+              {letterLang !== "en" && <p className="muted">{t("letter.languageHelp")}</p>}
+            </div>
+          )}
           {editing ? (
             <LetterEditor letter={letter} onSaved={setLetter} onDone={() => setEditing(false)} />
           ) : (
